@@ -17,7 +17,7 @@ def main_function():
             file_path = subdir + os.sep + file
             if file_path.endswith('.cpp') or file_path.endswith('.py') or file_path.endswith('.js') or file_path.endswith('.java'):
                 i = lizard.analyze_file(file_path)
-                print(i.function_list[0].__dict__)
+                #print(i.function_list[0].__dict__)
                 my_json = json.dumps(i.function_list[0].__dict__, indent=4)
                 arr.append(my_json)
 
