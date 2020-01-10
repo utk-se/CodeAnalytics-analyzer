@@ -5,7 +5,6 @@ import os
 import lizard
 import json
 from pydriller import RepositoryMining, GitRepository
-import inspect, importlib as implib
 
 '''
 List of dependencies: 
@@ -37,14 +36,16 @@ def handle_py_file(file):
 	ftype = "Python"
 	list_of_imports = []
 
-	path, _ = os.path.splitext(file) # path = file path without the extension
-	file_name = path.split('/')[-1] # file_name = the file without the path
+	with open(file) as f:
+		for line in f:
+			if line.split(' ', len(line))[0] == 'import' or line.split(' ', len(line))[0] == 'from':
+				list_of_imports.append(line.split(' ', len(line))[1])
+				if(list_of_imports[-1].find(',') > -1):
+					list_of_imports[-1] = list_of_imports[-1].replace(',', '')
+					list_of_imports.append(line.split(' ', len(line))[2])
 
-	mod = implib.import_module(file_name, path)
-	print(mod)
-	for i in inspect.getmembers(mod, inspect.ismodule):
-		list_of_imports.append(i[0])
 	num_dependencies = len(list_of_imports)
+	list_of_imports = list(map(str.strip, list_of_imports))
 	return ftype, num_dependencies, list_of_imports
 
 def handle_c_file(file):
