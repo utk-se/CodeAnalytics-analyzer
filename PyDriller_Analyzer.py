@@ -40,8 +40,13 @@ def handle_py_file(file, numlines):
 	list_of_vars = []
 	num_funcs = 0
 	total_width = 0
+	total_funct_width = 0
+	total_funct_height = 0
 	avg_width = 0
+	avg_funct_height = 0
+	avg_funct_width = 0
 	num_vars = 0
+	funct_flag = False
 
 	# Open the file
 	with open(file) as f:
@@ -59,10 +64,23 @@ def handle_py_file(file, numlines):
 						if parsed_line[i-1].replace('\t', '') not in list_of_vars:
 							list_of_vars.append(parsed_line[i-1].replace('\t', ''))
 							num_vars += 1
+			
+			# determine the average height and width of functions
+			if funct_flag == True:
+				if line is "":
+					pass
+				elif (len(line) - len(line.lstrip())) == 0:
+					funct_flag = False
+				else:
+					total_funct_height += 1
+					total_funct_width += len(line.rstrip())
+
 			# determine the number of functions
 			if len(line.split()) > 1 and line.split(' ', 1)[0] == 'def':
+				funct_flag = True
 				num_funcs += 1
 				list_of_functions.append(line.split(' ', 1)[1].replace(':', ''))
+
 			# determine the number of imports
 			if line.split(' ', len(line))[0] == 'import' or line.split(' ', len(line))[0] == 'from':
 				list_of_imports.append(line.split(' ', len(line))[1])
@@ -75,12 +93,12 @@ def handle_py_file(file, numlines):
 	list_of_vars = list(map(str.strip, list_of_vars))
 	list_of_imports = list(map(str.strip, list_of_imports))
 	list_of_functions = list(map(str.strip, list_of_functions))
-	# calculate average width
-	# ----------------------------------NOTE------------------------------------------------
-	# This may potentially change to average width of a function rather than the entire file
-	# --------------------------------------------------------------------------------------
-	avg_width = total_width / numlines
-	return ftype, num_dependencies, list_of_imports, avg_width, num_funcs, list_of_functions, num_vars, list_of_vars
+
+	avg_width = int(total_width / numlines) # calculate average width of entire file
+	avg_funct_width = int(total_funct_width / total_funct_height) # calculate average function width
+	avg_funct_height = int(total_funct_height / num_funcs) # calculate average function height
+
+	return ftype, num_dependencies, list_of_imports, avg_width, num_funcs, list_of_functions, num_vars, list_of_vars, avg_funct_height, avg_funct_width
 
 def handle_c_file(file):
 
@@ -112,7 +130,7 @@ def main_function():
 			nlines = calculate_num_lines(file)
 
 			if py: 
-				ftype, num_dependencies, import_list, avg_width, num_funcs, funcs_list, num_vars, vars_list = handle_py_file(file, nlines)
+				ftype, num_dependencies, import_list, avg_width, num_funcs, funcs_list, num_vars, vars_list, avg_func_height, avg_func_width = handle_py_file(file, nlines)
 			elif cpp or c: 
 				ftype = handle_c_file(file)
 			elif js: 
@@ -126,8 +144,10 @@ def main_function():
 			print("Average width of file: " + str(int(avg_width)))
 			print("Number of functions: " + (str(num_funcs)))
 			print("Function list: ", funcs_list)
-			print("Imports: ", import_list)
+			print("Average function height: ", avg_func_height)
+			print("Average function width: ", avg_func_width)
 			print("Number of Dependencies: " + str(num_dependencies))
+			print("Imports: ", import_list)
 			print("Number of variables: " + str(num_vars))
 			print("List of variables: ", vars_list)
 			print("\n")
