@@ -7,10 +7,17 @@ Aiden and Jonathan:
  - Return results in a file based parseable format
 
 ## Pip Dependencies
-* lizard - ```pip install lizard``` - https://github.com/terryyin/lizard
-* PyDriller - ```pip install pydriller``` - https://github.com/ishepard/pydriller
+
+To install, type: pip install -r requirements.txt
+
+* lizard - https://github.com/terryyin/lizard
+* PyDriller - https://github.com/ishepard/pydriller
 * argparse
 
 ## Other Dependencies
 * Git
 * Python3
+
+## Dependencies (pip)
+* lizard
+* argparse
