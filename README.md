@@ -8,5 +8,12 @@ Aiden and Jonathan:
 
 
 ## Dependencies (pip)
+To install, type: pip install -r requirements.txt
 * lizard
 * argparse
+
+## Datapoints being reported:
+- the nloc (lines of code without comments),
+- CCN (cyclomatic complexity number),
+- token count of functions.
+- parameter count of functions.
