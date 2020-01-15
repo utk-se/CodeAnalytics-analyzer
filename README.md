@@ -17,7 +17,3 @@ To install, type: pip install -r requirements.txt
 ## Other Dependencies
 * Git
 * Python3
-
-## Dependencies (pip)
-* lizard
-* argparse
