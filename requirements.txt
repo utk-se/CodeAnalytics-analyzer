@@ -1,3 +1,2 @@
-CodeAnalytics-Analyzer
 lizard>=1.17.3
 argparse>=1.2.1
