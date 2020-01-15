@@ -38,6 +38,8 @@ def handle_py_file(file, numlines):
 	list_of_imports = []
 	list_of_functions = []
 	list_of_vars = []
+	list_of_avg_widths = []
+	list_of_heights = []
 	num_funcs = 0
 	total_width = 0
 	total_funct_width = 0
@@ -71,6 +73,10 @@ def handle_py_file(file, numlines):
 					pass
 				elif (len(line) - len(line.lstrip())) == 0:
 					funct_flag = False
+					list_of_heights.append(total_funct_height)
+					list_of_avg_widths.append(total_funct_width / total_funct_height)
+					total_funct_height = 0
+					total_funct_width = 0
 				else:
 					total_funct_height += 1
 					total_funct_width += len(line.rstrip())
@@ -95,8 +101,8 @@ def handle_py_file(file, numlines):
 	list_of_functions = list(map(str.strip, list_of_functions))
 
 	avg_width = int(total_width / numlines) # calculate average width of entire file
-	avg_funct_width = int(total_funct_width / total_funct_height) # calculate average function width
-	avg_funct_height = int(total_funct_height / num_funcs) # calculate average function height
+	avg_funct_width = int(sum(list_of_avg_widths) / len(list_of_avg_widths)) # calculate average function width
+	avg_funct_height = int(sum(list_of_heights) / len(list_of_heights)) # calculate average function height
 
 	return ftype, num_dependencies, list_of_imports, avg_width, num_funcs, list_of_functions, num_vars, list_of_vars, avg_funct_height, avg_funct_width
 
@@ -130,7 +136,7 @@ def main_function():
 			nlines = calculate_num_lines(file)
 
 			if py: 
-				ftype, num_dependencies, import_list, avg_width, num_funcs, funcs_list, num_vars, vars_list, avg_func_height, avg_func_width = handle_py_file(file, nlines)
+				ftype, num_dependencies, import_list, avg_width, num_funcs, funcs_list, num_vars, vars_list, avg_funct_height, avg_funct_width = handle_py_file(file, nlines)
 			elif cpp or c: 
 				ftype = handle_c_file(file)
 			elif js: 
@@ -144,8 +150,8 @@ def main_function():
 			print("Average width of file: " + str(int(avg_width)))
 			print("Number of functions: " + (str(num_funcs)))
 			print("Function list: ", funcs_list)
-			print("Average function height: ", avg_func_height)
-			print("Average function width: ", avg_func_width)
+			print("Average function height: ", avg_funct_height)
+			print("Average function width: ", avg_funct_width)
 			print("Number of Dependencies: " + str(num_dependencies))
 			print("Imports: ", import_list)
 			print("Number of variables: " + str(num_vars))
