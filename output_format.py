@@ -8,7 +8,7 @@ repo_obj = {
 file_obj = {
     "num_lines": None,
     "file_extension": None,
-    "methods": [],  #  Tuples w/ start and end lines of methods/classes
+    "methods": [],  #  Pair/Tuples with start and end lines of methods/classes
     "classes": [],
     "lines": []
 }
