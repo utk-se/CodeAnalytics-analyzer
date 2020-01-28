@@ -29,7 +29,7 @@ class file_obj:
 		self.file_name = None
 		self.file_extension = None
 		self.num_lines = None
-		self.methods = []  #  Pair/Tuples with start and end lines of methods/classes
+		self.methods = []  # Pair/Tuples with start and end lines of methods/classes
 		self.classes = []
 		self.lines = []
 

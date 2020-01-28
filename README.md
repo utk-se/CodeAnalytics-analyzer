@@ -8,6 +8,7 @@ Aiden and Jonathan:
 
 ## Pip Dependencies
 
+<<<<<<< HEAD
 To install, type: pip install -r requirements.txt
 
 * lizard - https://github.com/terryyin/lizard
@@ -49,3 +50,15 @@ The output of this analyzer will follow this format in a json file for a given r
 ## Other Dependencies
 * Git
 * Python3
+=======
+## Dependencies (pip)
+To install, type: pip install -r requirements.txt
+* lizard
+* argparse
+
+## Datapoints being reported:
+- the nloc (lines of code without comments),
+- CCN (cyclomatic complexity number),
+- token count of functions.
+- parameter count of functions.
+>>>>>>> master
