@@ -4,136 +4,110 @@ import argparse
 import os
 import lizard
 import json
-from pydriller import RepositoryMining, GitRepository
-
-'''
-List of dependencies: 
-	pydriller
-	lizard
-	git
-	python3
-	pyminifier? -- Might potentially use this for analyzing python code, such as examing imports and etc.
-'''
-
-class repo_obj:
-	def __init__(self):
-		self.file_objs = []
-		self.num_lines = None
-		self.num_files = 0
-	
-	def update_num_files(self):
-		self.num_files += 1
-
-class file_obj:
-	def __init__(self):
-		self.file_name = None
-		self.file_extension = None
-		self.num_lines = None
-		self.methods = []  # Pair/Tuples with start and end lines of methods/classes
-		self.classes = []
-		self.lines = []
-
-	def calculate_num_lines(self, file):
-
-		with open(file) as f:
-			self.num_lines = 0
-			i = 0
-			for i,l in enumerate(f):
-				pass
-		self.num_lines = i+1
-		return self.num_lines
-
-class line_obj:
-	def __init__(self):
-		# Proposed usage: [var, func call, loop, conditional, return,
-    	# assignment, include/import]
-		# or is = 0...7 to indicate which it is
-    	# 'is' subject to change. These could be used for different heatmap 'colors'
-		self.line_type = None
-		self.start_index = None  # int specifying where line starts
-		self.has_tabs = None  # boolean for existence
-		self.end_index = None  # int specifying where line ends
-
-	def find_start_index(self, line):
-		self.start_index = len(line) - len(line.lstrip())
-
-	def find_end_index(self, line):
-		self.end_index = len(line)
 
 #-------------------Setting/getting the args---------------------------------------------
 parser = argparse.ArgumentParser(description="Arguments for CodeAnalytics-analyzer")
+
 parser.add_argument('-p', type=str, required=True, 
-    help='Required. The path to a repo.')
+    help='Required. The path to a repo containing code.')
+
+# TODO: replace if statements with logger
+parser.add_argument('-d', action='store_true', help='Enable debugging')
+# TODO: add ignore file
+parser.add_argument('-i', type=str, help="Specifies an ignorefile. ")
+# How much to expand tabs (default: off)
+parser.add_argument('-e', type=int, default=4, help="Specifies number of spaces to represent tabs as.")
+parser.add_argument('-o', type=str, default="outfile.json", help="Specify name of outfile")
 args = parser.parse_args()
+
 #-------------------Done setting/getting args--------------------------------------------
 
-def handle_py_file(file, new_file):
-	
-	with open(file) as f:
-		for line in f:
-			new_line = line_obj()
-			if line.startswith('\t'):
-				new_line.has_tabs = True
-			new_line.find_start_index(line)
-			new_line.find_end_index(line)
+def main():
+    
+    repo_obj = {
+        "file_objs": [],
+        "num_lines": 0,
+        "num_files": 0
+    }
 
-			if (line.find('class') != -1 or line.find('Class') != -1) and line.find(':') != -1:
-				parsed_line = line.split(' ', 2)
-				#new_file.classes.append(parsed_line[1])
-			new_file.lines.append(new_line)
-	ftype = "Python"
-	return ftype
+    supported_filetypes = ['py', 'cpp', 'js', 'h', 'java']
+    # Walk through all files
+    for subdir, dirs, files in os.walk(args.p):  # go through every file within a given directory
+        # Exclude hidden files/directories 
+        # (see https://stackoverflow.com/questions/13454164/os-walk-without-hidden-folders)
+        files = [f for f in files if not f[0] == '.']
+        dirs[:] = [d for d in dirs if not d[0] == '.']
 
-def handle_c_file(file):
+        for filep in files:
+        
+            file_path = subdir + os.sep + filep
+            file_extension = file_path.split('.')[-1]
 
-	ftype = "C"
-	return ftype
+            # For each file check file type
+            if file_extension not in supported_filetypes:
+                continue
 
-def handle_js_file(file):
+            repo_obj["num_files"] += 1
+            file_obj = {
+                "num_lines": 0,
+                "file_extension": file_extension,
+                "file_name": file_path,
+                "methods": [],  #  Pair/Tuples with start and end lines of methods/classes
+                "classes": [],
+                "line_objs": [],
+                "nloc": None,
+                "token_count": 0
+            }
 
-	ftype = "Javascript"
-	return ftype
+            i = lizard.analyze_file(file_path)
 
-def handle_java_file(file):
+            file_obj["token_count"] = i.token_count
 
-	ftype = "Java"
-	return ftype
+            # Append info about methods
+            for func_dict in i.function_list:
+                file_obj["methods"].append(func_dict.__dict__)
 
-def main_function():
+            # Go thru each line in the file
+            with open(file_path) as file:
+                for line_num, line in enumerate(file):
+                    file_obj["num_lines"] += 1
+                    # Don't bother with lines that are just a newline
+                    if line == '\n':
+                        continue
 
-	new_repo = repo_obj()
+                    line_obj = {
+                        "index": line_num,
+                        "is": [None, None, None, None, None, None, None],
+                        "start_index": None,  # int specifying where line starts
+                        "num_tabs": 0,  # boolean for existence
+                        "end_index": None,  # int specifying where line ends
+                        "num_spaces": 0,
+                        "len": 0
+                    }
+                    # detect tabs & spaces
+                    line_obj["num_tabs"] = line.count('\t')
+                    line_obj["num_spaces"] = line.count(' ')
+                    line_obj["len"] = len(line)
+                    line = line.expandtabs(args.e)
 
-	file_types = ['.cpp', '.c', '.py', '.js', '.java']
-	files = GitRepository(args.p).files()
-	for file in files:
-		
-		new_repo.update_num_files()
+                    # detect start & end index
+                    line_obj["start_index"] = len(line) - len(line.lstrip())
+                    line_obj["end_index"] = len(line.rstrip())
+                    # TODO: detecting imports
 
-		extension = os.path.splitext(file)[1] # get the file extension
+                    # Add line obj to file obj
+                    file_obj["line_objs"].append(line_obj)
+            
+            # Add file obj to repo obj
+            repo_obj["file_objs"].append(file_obj)
 
-		new_file = file_obj() # instantiate a new file object
-		new_file.file_name = file
-		new_file.file_extension = extension
-		new_file.calculate_num_lines(file)
+    # Sum linecount
+    for obj in repo_obj["file_objs"]:
+        repo_obj["num_lines"] += obj["num_lines"]
+    # Write the repo object to json
+    with open(args.o, 'w') as outfile:
+        json.dump(repo_obj, outfile)
 
-		if extension in file_types:
-
-			if extension == '.py': 
-				ftype = handle_py_file(file, new_file)
-			elif extension == '.cpp' or extension == '.c': 
-				ftype = handle_c_file(file)
-			elif extension == '.js': 
-				ftype = handle_js_file(file)
-			else: 
-				ftype = handle_java_file(file)
-
-		print("Filename: " + str(new_file.file_name))
-		print("Extension: " + str(new_file.file_extension))
-		print("Numlines: " + str(new_file.num_lines))
-		new_repo.file_objs.append(new_file)
-	with open('data.json', 'w') as f:
-		data = json.dumps(new_repo, default=lambda o: o.__dict__, indent=4)
-		f.write(data)
 
 if __name__ == "__main__":
-    main_function()
+    main()
