@@ -38,9 +38,9 @@ def main():
         files = [f for f in files if not f[0] == '.']
         dirs[:] = [d for d in dirs if not d[0] == '.']
 
-        for file in files:
+        for filep in files:
         
-            file_path = subdir + os.sep + file
+            file_path = subdir + os.sep + filep
             file_extension = file_path.split('.')[-1]
 
             # For each file check file type
@@ -70,7 +70,6 @@ def main():
             # Go thru each line in the file
             with open(file_path) as file:
                 for line_num, line in enumerate(file):
-                    
                     file_obj["num_lines"] += 1
                     # Don't bother with lines that are just a newline
                     if line == '\n':
@@ -90,9 +89,10 @@ def main():
                     line_obj["num_spaces"] = line.count(' ')
                     line_obj["len"] = len(line)
                     line = line.expandtabs(args.e)
+
                     # detect start & end index
                     line_obj["start_index"] = len(line) - len(line.lstrip())
-                    line_obj["end_index"] = len(line) - len(line.rstrip())
+                    line_obj["end_index"] = len(line.rstrip())
                     # TODO: detecting imports
 
                     # Add line obj to file obj
@@ -101,6 +101,9 @@ def main():
             # Add file obj to repo obj
             repo_obj["file_objs"].append(file_obj)
 
+    # Sum linecount
+    for obj in repo_obj["file_objs"]:
+        repo_obj["num_lines"] += obj["num_lines"]
     # Write the repo object to json
     with open(args.o, 'w') as outfile:
         json.dump(repo_obj, outfile)
