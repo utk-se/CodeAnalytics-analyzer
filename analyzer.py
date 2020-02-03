@@ -69,35 +69,38 @@ def main():
 
             # Go thru each line in the file
             with open(file_path) as file:
-                for line_num, line in enumerate(file):
-                    file_obj["num_lines"] += 1
-                    # Don't bother with lines that are just a newline
-                    if line == '\n':
-                        continue
+                try:
+                    for line_num, line in enumerate(file):
+                        file_obj["num_lines"] += 1
+                        # Don't bother with lines that are just a newline
+                        if line == '\n':
+                            continue
 
-                    line_obj = {
-                        "index": line_num,
-                        "is": [None, None, None, None, None, None, None],
-                        "start_index": None,  # int specifying where line starts
-                        "num_tabs": 0,  # boolean for existence
-                        "end_index": None,  # int specifying where line ends
-                        "num_spaces": 0,
-                        "len": 0
-                    }
-                    # detect tabs & spaces
-                    line_obj["num_tabs"] = line.count('\t')
-                    line_obj["num_spaces"] = line.count(' ')
-                    line_obj["len"] = len(line)
-                    line = line.expandtabs(args.e)
+                        line_obj = {
+                            "index": line_num,
+                            "start_index": None,  # int specifying where line starts
+                            "num_tabs": 0,  # boolean for existence
+                            "end_index": None,  # int specifying where line ends
+                            "num_spaces": 0,
+                            "len": 0
+                        }
+                        # detect tabs & spaces
+                        line_obj["num_tabs"] = line.count('\t')
+                        line_obj["num_spaces"] = line.count(' ')
+                        line_obj["len"] = len(line)
+                        line = line.expandtabs(args.e)
 
-                    # detect start & end index
-                    line_obj["start_index"] = len(line) - len(line.lstrip())
-                    line_obj["end_index"] = len(line.rstrip())
-                    # TODO: detecting imports
+                        # detect start & end index
+                        line_obj["start_index"] = len(line) - len(line.lstrip())
+                        line_obj["end_index"] = len(line.rstrip())
+                        # TODO: detecting imports
 
-                    # Add line obj to file obj
-                    file_obj["line_objs"].append(line_obj)
-            
+                        # Add line obj to file obj
+                        file_obj["line_objs"].append(line_obj)
+                
+                except UnicodeDecodeError:
+                    continue
+
             # Add file obj to repo obj
             repo_obj["file_objs"].append(file_obj)
 
