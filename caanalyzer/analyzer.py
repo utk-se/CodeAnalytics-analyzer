@@ -75,8 +75,9 @@ class Analyzer:
                 for line2 in file_object[line_num:]:
                     # check num whitespace before non commented line
                     pass
+
     def analyze(self, input_path, output_path=None):
-    
+
         repo_obj = {
             "file_objs": [],
             "num_lines": 0,
@@ -132,9 +133,14 @@ class Analyzer:
 
                 file_obj["token_count"] = i.token_count
 
-                # Append info about methods
+                # Append info about methods 
                 for func_dict in i.function_list:
-                    file_obj["methods"].append(func_dict.__dict__)
+                    method_obj = {
+                        "start_line": func_dict.__dict__["start_line"],
+                        "end_line": func_dict.__dict__["end_line"],
+                        "token_count": func_dict.__dict__["token_count"]
+                    }
+                    file_obj["methods"].append(method_obj)
 
                 # Go thru each line in the file
                 with open(file_path) as file:
@@ -175,6 +181,12 @@ class Analyzer:
         for obj in repo_obj["file_objs"]:
             repo_obj["num_lines"] += obj["num_lines"]
 
+        # get average lines per file
+        repo_obj["avg_file_length"] = repo_obj["num_lines"] / repo_obj["num_files"]
+
+        # Max file length
+        repo_obj["max_file_length"] = max(repo_obj["file_objs"], key=lambda k: k["num_lines"])["num_lines"]
+        
         if output_path is not None:
             # Write the repo object to json
             with open(output_path, 'w') as outfile:
