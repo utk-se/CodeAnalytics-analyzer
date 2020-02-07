@@ -5,9 +5,9 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="codeanalytics-analyzer",
+    name="CAanalyzer",
     version="0.0.1",
-    author="USER",
+    author="Aiden Rutter/Julian Ball/Jonathan Bryan",
     author_email="azh@utk.edu",
     description="To be used in combination with codeanalytics aggregator",
     long_description=long_description,
