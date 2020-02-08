@@ -85,7 +85,8 @@ class Analyzer:
             "avg_file_length": 0,
             "max_file_length": 0,
             "num_methods": 0,
-            "num_tokens": 0
+            "num_tokens": 0,
+            "line_freqs": []
         }
 
         '''
@@ -144,38 +145,71 @@ class Analyzer:
 
                 # Go thru each line in the file
                 with open(file_path) as file:
-                    for line_num, line in enumerate(file):
-                        file_obj["num_lines"] += 1
-                        # Don't bother with lines that are just a newline
-                        if line == '\n':
-                            continue
+                    try:
+                        for line_num, line in enumerate(file):
+                            file_obj["num_lines"] += 1
+                            # Don't bother with lines that are just a newline
 
-                        line_obj = {
-                            "index": line_num,
-                            "start_index": None,  # int specifying where line starts
-                            "num_tabs": 0,  # boolean for existence
-                            "end_index": None,  # int specifying where line ends
-                            "num_spaces": 0,
-                            "len": 0
-                        }
+                            line_obj = {
+                                "index": line_num,
+                                "start_index": None,  # int specifying where line starts
+                                "num_tabs": 0,  # boolean for existence
+                                "end_index": None,  # int specifying where line ends
+                                "num_spaces": 0,
+                                "len": 0
+                            }
 
-                        # detect tabs & spaces
-                        line_obj["num_tabs"] = line.count('\t')
-                        line_obj["num_spaces"] = line.count(' ')
-                        line_obj["len"] = len(line)
-                        line = line.expandtabs(self.expand_tabs)
+                            # detect tabs & spaces
+                            line_obj["num_tabs"] = line.count('\t')
+                            line_obj["num_spaces"] = line.count(' ')
+                            line_obj["len"] = len(line)
+                            line = line.expandtabs(self.expand_tabs)
 
-                        # detect start & end index
-                        line_obj["start_index"] = len(line) - len(line.lstrip())
-                        line_obj["end_index"] = len(line.rstrip())
-                        # TODO: detecting imports
-        
-                        if self.output_raw:
-                            # Add line obj to file obj
-                            file_obj["line_objs"].append(line_obj)
+                            # detect start & end index
+                            line_obj["start_index"] = len(line) - len(line.lstrip())
+                            line_obj["end_index"] = len(line.rstrip())
+                            # TODO: detecting imports
+            
+                            if self.output_raw and line != '\n':
+                                # Add line obj to file obj
+                                file_obj["line_objs"].append(line_obj)
 
+                            # If
+                            if line_num >= repo_obj['max_file_length']:
+                                line_freq_obj = {
+                                    "start_indexes": {
+                                        line_obj["start_index"]: 1
+                                    },
+                                    "end_indexes": {
+                                        line_obj["end_index"]: 1
+                                    },
+                                    "num_tabs": line_obj["num_tabs"],
+                                    "num_spaces": line_obj["num_spaces"],
+                                }
+                                repo_obj["line_freqs"].append(line_freq_obj)
+                            else:
+                                if line_obj["start_index"] not in repo_obj["line_freqs"][line_num]["start_indexes"].keys():
+                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] = 1
+                                else:
+                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] += 1
+
+                                if line_obj["end_index"] not in repo_obj["line_freqs"][line_num]["end_indexes"].keys():
+                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] = 1
+                                else:
+                                    repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["end_index"]] += 1
+
+                                repo_obj["line_freqs"][line_num]["num_tabs"] += line_obj["num_tabs"]
+                                repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
+
+                    except UnicodeDecodeError:
+                        # TODO: add logger & note error
+                        continue
                 # Add file obj to repo obj
                 repo_obj["file_objs"].append(file_obj)
+                
+                # Max file length
+                if repo_obj["max_file_length"] < file_obj["num_lines"]:
+                    repo_obj["max_file_length"] = file_obj["num_lines"]
 
         # Sum linecount
         for obj in repo_obj["file_objs"]:
@@ -184,8 +218,6 @@ class Analyzer:
         # get average lines per file
         repo_obj["avg_file_length"] = repo_obj["num_lines"] / repo_obj["num_files"]
 
-        # Max file length
-        repo_obj["max_file_length"] = max(repo_obj["file_objs"], key=lambda k: k["num_lines"])["num_lines"]
         
         if output_path is not None:
             # Write the repo object to json
