@@ -176,6 +176,7 @@ class Analyzer:
 
                             # If
                             if line_num >= repo_obj['max_file_length']:
+
                                 line_freq_obj = {
                                     "start_indexes": {
                                         line_obj["start_index"]: 1
@@ -194,7 +195,7 @@ class Analyzer:
                                     repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] += 1
 
                                 if line_obj["end_index"] not in repo_obj["line_freqs"][line_num]["end_indexes"].keys():
-                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] = 1
+                                    repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["start_index"]] = 1
                                 else:
                                     repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["end_index"]] += 1
 
@@ -203,7 +204,9 @@ class Analyzer:
 
                     except UnicodeDecodeError:
                         # TODO: add logger & note error
+                        print("Unicode error")
                         continue
+
                 # Add file obj to repo obj
                 repo_obj["file_objs"].append(file_obj)
                 
@@ -217,7 +220,6 @@ class Analyzer:
 
         # get average lines per file
         repo_obj["avg_file_length"] = repo_obj["num_lines"] / repo_obj["num_files"]
-
         
         if output_path is not None:
             # Write the repo object to json
