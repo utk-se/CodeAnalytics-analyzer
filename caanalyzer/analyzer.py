@@ -65,6 +65,8 @@ class Analyzer:
 
         self.repo_obj = None
 
+        log.debug("Analyzer instance created.")
+
     '''
     returns the serializable dictionary that can be outputted as a json file
     Required argument: input_path - The path to a repo containing code.
