@@ -1,22 +1,21 @@
 #! /usr/bin/env python
 
-import argparse 
+import argparse
 import os
 import lizard
 import json
+from cadistributor import log
 
 class Analyzer:
     '''
-    Provided a repository, uses static code analysis to output data about 
-    the shape of code. ie, it outputs information regarding the use of 
+    Provided a repository, uses static code analysis to output data about
+    the shape of code. ie, it outputs information regarding the use of
     whitespace, and the placement of code elements within a file.
 
-    ignorefile: path to file containing rules for files to exclude from analysis. 
+    ignorefile: path to file containing rules for files to exclude from analysis.
     Think of  a gitignore. # TODO: implement
-    expand_tabs: This argument expects an int, representing the number of spaces 
+    expand_tabs: This argument expects an int, representing the number of spaces
     to represent tabs as.
-    output_raw: Enabling this flag will add information about each line to the output
-    json. This may significantly increase RAM usage and output size.
     Debug: This flag enables debug statements to be printed. # TODO: Use logger
     '''
     class Repo:
@@ -39,7 +38,7 @@ class Analyzer:
                 "nloc": None,
                 "token_count": 0
             }
-            
+
     class Line:
         def __init__(self, line_num):
             self.line = {
@@ -51,8 +50,12 @@ class Analyzer:
                 "len": 0
             }
 
-    def __init__(self, ignorefile=None, expand_tabs=4, output_raw=True, 
+    def __init__(self, ignorefile=None, expand_tabs=4, output_raw=True,
         debug=False):
+        """
+        output_raw:
+            Enabling this flag will add information about each line to the output json. This may significantly increase RAM usage and output size.
+        """
 
         self.ignorefile = ignorefile
         self.expand_tabs = expand_tabs
@@ -62,7 +65,9 @@ class Analyzer:
 
         self.repo_obj = None
 
-    ''' 
+        log.debug("Analyzer instance created.")
+
+    '''
     returns the serializable dictionary that can be outputted as a json file
     Required argument: input_path - The path to a repo containing code.
     Optional arguments: output_path, the name/path to the output json file.
@@ -90,8 +95,8 @@ class Analyzer:
         }
 
         '''
-        TODO: instead of storing info about each line, we can store 
-        one obj w/ a 'median file' object, which has metrics including 
+        TODO: instead of storing info about each line, we can store
+        one obj w/ a 'median file' object, which has metrics including
         line-by-line data that is based off the other files.
         ? One for each lang? Potential issue: summing entire repo into 1 file
         seems overly reductive.
@@ -100,17 +105,17 @@ class Analyzer:
         For each line, frequency of method declaration or body
         For file-level data: record avgs
         For line-level info - store frequency (ie, freq_newlines @ lineno x)
-        ''' 
+        '''
 
         # Walk through all files
         for subdir, dirs, files in os.walk(input_path):  # go through every file within a given directory
-            # Exclude hidden files/directories 
+            # Exclude hidden files/directories
             # (see https://stackoverflow.com/questions/13454164/os-walk-without-hidden-folders)
             files = [f for f in files if not f[0] == '.']
             dirs[:] = [d for d in dirs if not d[0] == '.']
 
             for filep in files:
-            
+
                 file_path = subdir + os.sep + filep
                 file_extension = file_path.split('.')[-1]
 
@@ -134,7 +139,7 @@ class Analyzer:
 
                 file_obj["token_count"] = i.token_count
 
-                # Append info about methods 
+                # Append info about methods
                 for func_dict in i.function_list:
                     method_obj = {
                         "start_line": func_dict.__dict__["start_line"],
@@ -169,7 +174,7 @@ class Analyzer:
                             line_obj["start_index"] = len(line) - len(line.lstrip())
                             line_obj["end_index"] = len(line.rstrip())
                             # TODO: detecting imports
-            
+
                             if self.output_raw and line != '\n':
                                 # Add line obj to file obj
                                 file_obj["line_objs"].append(line_obj)
@@ -209,7 +214,7 @@ class Analyzer:
 
                 # Add file obj to repo obj
                 repo_obj["file_objs"].append(file_obj)
-                
+
                 # Max file length
                 if repo_obj["max_file_length"] < file_obj["num_lines"]:
                     repo_obj["max_file_length"] = file_obj["num_lines"]
@@ -220,7 +225,7 @@ class Analyzer:
 
         # get average lines per file
         repo_obj["avg_file_length"] = repo_obj["num_lines"] / repo_obj["num_files"]
-        
+
         if output_path is not None:
             # Write the repo object to json
             with open(output_path, 'w') as outfile:
