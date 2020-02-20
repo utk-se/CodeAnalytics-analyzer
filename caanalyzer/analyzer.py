@@ -1,4 +1,3 @@
-#! /usr/bin/env python
 
 import argparse
 import os
@@ -209,7 +208,7 @@ class Analyzer:
 
                     except UnicodeDecodeError:
                         # TODO: add logger & note error
-                        print("Unicode error")
+                        log.err("Unicode error")
                         continue
 
                 # Add file obj to repo obj
