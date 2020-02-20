@@ -1,4 +1,5 @@
 
+from bson.json_util import loads, dumps
 from cadistributor import log
 from .analyzer import Analyzer
 
@@ -10,5 +11,4 @@ def analyze(path):
 
 if __name__ == "__main__":
     log.info("Running analyze on current directory.")
-    print(analyze("."))
-
+    print(dumps(analyze(".")))
