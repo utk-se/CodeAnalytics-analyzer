@@ -4,6 +4,7 @@ import argparse
 import os
 import lizard
 import json
+import class_finder
 
 class Analyzer:
     '''
@@ -67,14 +68,6 @@ class Analyzer:
     Required argument: input_path - The path to a repo containing code.
     Optional arguments: output_path, the name/path to the output json file.
     '''
-    def class_finder(file_object):
-        for line_num, line in enumerate(file_object):
-            pattern = re.compile("^\#.*class.*\:")
-            if line.contains(pattern):
-                num_white = line.count(' ')
-                for line2 in file_object[line_num:]:
-                    # check num whitespace before non commented line
-                    pass
 
     def analyze(self, input_path, output_path=None):
 
@@ -133,6 +126,10 @@ class Analyzer:
                 i = lizard.analyze_file(file_path)
 
                 file_obj["token_count"] = i.token_count
+                # ADDING LIST OF TUPLES OF CLASS INFO TO file_obj
+                # EACH TUPLE IS SIZE 2 WITH STARTING AND ENDING
+                # LINE NUMBER OF CLASS (ZERO INDEXED)
+                file_obj["classes"] = class_finder.find_classes(file_path)
 
                 # Append info about methods 
                 for func_dict in i.function_list:
