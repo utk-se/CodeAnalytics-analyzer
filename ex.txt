@@ -1,0 +1,46 @@
+// js and c++ test
+class Car {
+  constructor(brand) {
+    this.carname = brand;
+  }
+  static hello() {
+    return "Hello!!";
+  }
+}
+
+// js and c++ test
+class Car
+{
+  constructor(brand) {
+    this.carname = brand;
+  }
+  static hello() {
+    return "Hello!!";
+  }
+}
+
+// java test
+public class Car {
+  constructor(brand) {
+    this.carname = brand;
+  }
+  static hello() {
+    return "Hello!!";
+  }
+}
+
+// java test
+public class Car
+{
+  constructor(brand) {
+    this.carname = brand;
+  }
+  static hello() {
+    return "Hello!!";
+  }
+}
+
+// python test
+class pyclass:
+    pass
+    pass
