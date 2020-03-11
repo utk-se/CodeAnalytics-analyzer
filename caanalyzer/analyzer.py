@@ -6,6 +6,7 @@ import json
 import class_finder
 from cadistributor import log
 
+
 class Analyzer:
     '''
     Provided a repository, uses static code analysis to output data about
@@ -205,7 +206,7 @@ class Analyzer:
                                 repo_obj["line_freqs"][line_num]["num_tabs"] += line_obj["num_tabs"]
                                 repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
 
-                    except UnicodeDecodeError:
+                    except UnicodeDecodeError or FileNotFoundError:
                         # TODO: add logger & note error
                         log.err("Unicode error")
                         continue
