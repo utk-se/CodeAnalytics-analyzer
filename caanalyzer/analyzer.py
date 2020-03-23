@@ -1,11 +1,9 @@
-
 import argparse
 import os
 import lizard
 import json
-import class_finder
+import re
 from cadistributor import log
-
 
 class Analyzer:
     '''
@@ -33,7 +31,7 @@ class Analyzer:
                 "num_lines": 0,
                 "file_extension": file_extension,
                 "file_name": file_path,
-                "methods": [],  # Pair/Tuples with start and end lines of methods/classes
+                "methods": [],  #  Pair/Tuples with start and end lines of methods/classes
                 "classes": [],
                 "line_objs": [],
                 "nloc": None,
@@ -52,7 +50,7 @@ class Analyzer:
             }
 
     def __init__(self, ignorefile=None, expand_tabs=4, output_raw=True,
-                 debug=False):
+        debug=False):
         """
         output_raw:
             Enabling this flag will add information about each line to the output json. This may significantly increase RAM usage and output size.
@@ -66,13 +64,21 @@ class Analyzer:
 
         self.repo_obj = None
 
-        log.debug("Analyzer instance created.")
+        #log.debug("Analyzer instance created.")
 
     '''
     returns the serializable dictionary that can be outputted as a json file
     Required argument: input_path - The path to a repo containing code.
     Optional arguments: output_path, the name/path to the output json file.
     '''
+    def class_finder(self, file_object):
+        for line_num, line in enumerate(file_object):
+            pattern = re.compile("^\#.*class.*\:")
+            if line.contains(pattern):
+                num_white = line.count(' ')
+                for line2 in file_object[line_num:]:
+                    # check num whitespace before non commented line
+                    pass
 
     def analyze(self, input_path, output_path=None):
 
@@ -101,8 +107,7 @@ class Analyzer:
         '''
 
         # Walk through all files
-        # go through every file within a given directory
-        for subdir, dirs, files in os.walk(input_path):
+        for subdir, dirs, files in os.walk(input_path):  # go through every file within a given directory
             # Exclude hidden files/directories
             # (see https://stackoverflow.com/questions/13454164/os-walk-without-hidden-folders)
             files = [f for f in files if not f[0] == '.']
@@ -122,20 +127,20 @@ class Analyzer:
                     "num_lines": 0,
                     "file_extension": file_extension,
                     "file_name": file_path,
-                    "methods": [],  # Pair/Tuples with start and end lines of methods/classes
+                    "methods": [],  #  Pair/Tuples with start and end lines of methods/classes
                     "classes": [],
                     "line_objs": [],
                     "nloc": None,
                     "token_count": 0
                 }
 
-                i = lizard.analyze_file(file_path)
+                try:
+                    i = lizard.analyze_file(file_path)
+                except RecursionError:
+                    log.err("Error with lizard analysis")
+                    continue
 
                 file_obj["token_count"] = i.token_count
-                # ADDING LIST OF TUPLES OF CLASS INFO TO file_obj
-                # EACH TUPLE IS SIZE 2 WITH STARTING AND ENDING
-                # LINE NUMBER OF CLASS (ZERO INDEXED)
-                file_obj["classes"] = class_finder.find_classes(file_path)
 
                 # Append info about methods
                 for func_dict in i.function_list:
@@ -146,9 +151,9 @@ class Analyzer:
                     }
                     file_obj["methods"].append(method_obj)
 
-                # Go thru each line in the file
-                with open(file_path) as file:
-                    try:
+                try:
+                    # Go thru each line in the file
+                    with open(file_path) as file:
                         for line_num, line in enumerate(file):
                             file_obj["num_lines"] += 1
                             # Don't bother with lines that are just a newline
@@ -169,8 +174,7 @@ class Analyzer:
                             line = line.expandtabs(self.expand_tabs)
 
                             # detect start & end index
-                            line_obj["start_index"] = len(
-                                line) - len(line.lstrip())
+                            line_obj["start_index"] = len(line) - len(line.lstrip())
                             line_obj["end_index"] = len(line.rstrip())
                             # TODO: detecting imports
 
@@ -206,10 +210,10 @@ class Analyzer:
                                 repo_obj["line_freqs"][line_num]["num_tabs"] += line_obj["num_tabs"]
                                 repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
 
-                    except UnicodeDecodeError or FileNotFoundError:
-                        # TODO: add logger & note error
-                        log.err("Unicode error")
-                        continue
+                except Exception as e:
+                    # TODO: add logger & note error
+                    log.err("Unexpected error: " + str(e))
+                    continue
 
                 # Add file obj to repo obj
                 repo_obj["file_objs"].append(file_obj)
@@ -223,9 +227,7 @@ class Analyzer:
             repo_obj["num_lines"] += obj["num_lines"]
 
         # get average lines per file
-        if repo_obj["num_files"] > 0:
-            repo_obj["avg_file_length"] = repo_obj["num_lines"] / \
-                repo_obj["num_files"]
+        repo_obj["avg_file_length"] = repo_obj["num_lines"] / repo_obj["num_files"]
 
         if output_path is not None:
             # Write the repo object to json
