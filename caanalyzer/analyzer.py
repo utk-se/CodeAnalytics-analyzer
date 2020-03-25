@@ -5,6 +5,7 @@ import os
 import lizard
 import json
 import class_finder
+import lib_finder
 
 class Analyzer:
     '''
@@ -120,7 +121,10 @@ class Analyzer:
                     "classes": [],
                     "line_objs": [],
                     "nloc": None,
-                    "token_count": 0
+                    "token_count": 0,
+                    "num_libs": 0,
+                    "num_vars": 0,
+                    "avg_width": 0
                 }
 
                 i = lizard.analyze_file(file_path)
@@ -129,7 +133,8 @@ class Analyzer:
                 # ADDING LIST OF TUPLES OF CLASS INFO TO file_obj
                 # EACH TUPLE IS SIZE 2 WITH STARTING AND ENDING
                 # LINE NUMBER OF CLASS (ZERO INDEXED)
-                file_obj["classes"] = class_finder.find_classes(file_path)
+                file_obj["classes"] = class_finder.find_classes(file_path, file_extension)
+                file_obj["num_libs"] = lib_finder.find_libs(file_path, file_extension)
 
                 # Append info about methods 
                 for func_dict in i.function_list:
@@ -141,10 +146,12 @@ class Analyzer:
                     file_obj["methods"].append(method_obj)
 
                 # Go thru each line in the file
+                file_width_sum = 0
                 with open(file_path) as file:
                     try:
                         for line_num, line in enumerate(file):
                             file_obj["num_lines"] += 1
+                            file_width_sum += len(line)
                             # Don't bother with lines that are just a newline
 
                             line_obj = {
@@ -165,8 +172,7 @@ class Analyzer:
                             # detect start & end index
                             line_obj["start_index"] = len(line) - len(line.lstrip())
                             line_obj["end_index"] = len(line.rstrip())
-                            # TODO: detecting imports
-            
+
                             if self.output_raw and line != '\n':
                                 # Add line obj to file obj
                                 file_obj["line_objs"].append(line_obj)
@@ -198,6 +204,8 @@ class Analyzer:
 
                                 repo_obj["line_freqs"][line_num]["num_tabs"] += line_obj["num_tabs"]
                                 repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
+
+                        file_obj["avg_width"] /= file_obj["num_lines"]
 
                     except UnicodeDecodeError:
                         # TODO: add logger & note error

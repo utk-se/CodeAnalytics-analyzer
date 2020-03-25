@@ -13,7 +13,7 @@ def find_classes(path, lang, verbose=0):
     with open(path, 'r') as f:
         class_tuples = []
         content = f.readlines()
-        if lang == 'python':
+        if lang == 'py':
             pattern = re.compile("\s*class\s\w*:\n")
             for line_no_start, line in enumerate(content):
                 if pattern.match(line) is not None:
@@ -81,4 +81,7 @@ def find_classes(path, lang, verbose=0):
                                 if verbose:
                                     print('found end of class at line #', line_no_end + 2)
                                 break
+        else:
+            print(lang, "not supported yet")
+            exit()
         return class_tuples
