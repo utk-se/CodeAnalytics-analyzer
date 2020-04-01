@@ -1,12 +1,27 @@
-import argparse
 import os
 import lizard
 import json
 import re
 from cadistributor import log
+import exceptions
+import statistics
+from sklearn.cluster import KMeans
+
+
+def sortkey_linecollection(lc):
+    return len(lc['line_objs'])
+
+# evenly split a list into n chunks
+
+
+def to_chunk(l, n_chunks):
 
 
 class Analyzer:
+    sampling_methods = {
+        'mode': statistics.mode,
+        'median': statistics.median
+    }
     '''
     Provided a repository, uses static code analysis to output data about
     the shape of code. ie, it outputs information regarding the use of
@@ -65,7 +80,7 @@ class Analyzer:
 
         self.repo_obj = None
 
-        #log.debug("Analyzer instance created.")
+        log.debug("Analyzer instance created.")
 
     '''
     returns the serializable dictionary that can be outputted as a json file
@@ -81,6 +96,59 @@ class Analyzer:
                 for line2 in file_object[line_num:]:
                     # check num whitespace before non commented line
                     pass
+
+    '''
+    merges or interpolates neighbors in a given line collection to k groups
+    TODO: file, method, and class objs refactor to 'line collections' that have the same fields
+    will be useful for aggregation stage
+    '''
+
+    def agg_scalek(self, line_collection, k, downsampling_method='mode', upsampling_method='nearest_neighbor', merge_method=None):
+        # Upscaling not supported for this dim
+        if len(line_collection) <= 0:
+            raise AggregationException(
+                "Line collection empty. have you run .analyze()?")
+
+        if k <= 0 or k < len(line_collection):
+            raise AggregationException(
+                "Expected 0 < k: {} < {}".format(k, len(line_collection)))
+
+        # get sampling methods
+        if type(downsampling_method) is str:
+            if sampling_methods.has_key(downsampling_method):
+                downsampling_method = sampling_methods[downsampling_method]
+            else:
+                raise AggregationException(
+                    "Invalid downsampling identifier: {}".format(downsampling_method))
+
+        # linegroup clustering; group similarly sized linegroups into k groups.
+        line_collection.sort(key=sortkey_linecollection)
+        # TODO: use k means clustering
+        k_means = Kmeans(n_clusters=k, max_iter=100)
+
+        # line_collection =
+
+        # perform elementwise (line_obj) scaling on each element
+        ret_collection = []
+
+        for line_subcollection in line_collection:
+            # TODO: find median linesize (will be length of our aggregated line collection)
+            median_count = len(line_subcollection[len(
+                line_subcollection) // 2]['line_objs'])
+            # for each linegroup in subcollection, up/downscale to fit median size
+            for linegroup in line_subcollection:
+
+                # split lines into chunks (size of lg // chunksize) + remainder = target size
+                chunksize = len(linegroup['line_obj']) // median_count
+            # use downsampling method on each chunk
+
+            # scale each item to median linesize (TODO: configurable)
+        return line_collection
+
+    def agg_freq(self, line_collection, asarray=False):
+        pass
+
+    # def export():
 
     def analyze(self, input_path, output_path=None):
 
