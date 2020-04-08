@@ -2,8 +2,8 @@ import exceptions
 import statistics
 from collections import Counter
 from sklearn.cluster import KMeans
-
-
+from cadistributor import log
+import numpy as np
 sampling_methods = {
     'mode': statistics.mode,
     'median': statistics.median
@@ -27,9 +27,6 @@ def sortkey_linelist(line):
 def to_chunk(l, n_chunks):
     # len(chunk) == len(list) // n_chunks
     return [l[i:i + len(l) // n_chunks] for i in range(0, len(l), len(l) // n_chunks)]
-
-# python's statistics mode sucks, it doesn't support key and throws an
-# exception if there's two equally common values
 
 
 def freq(line_container, asarray=False):
@@ -67,8 +64,24 @@ def freq(line_container, asarray=False):
         self.repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
 
 
-def my_mode(lst):
-    data_dict = dict(lst)
+def mode(lst):
+    l_dict = {}
+    # count frequencies
+    for n in lst:
+        if n in l_dict:
+            l_dict[n] += 1
+        else:
+            l_dict[n] = 1
+
+    # get item with highest frequency
+    max_f = 0
+    rv = 0
+    for k, v in l_dict.items():
+        if v > max_f:
+            max_f = v
+            rv = k
+
+    return rv
 
 
 '''
@@ -84,7 +97,7 @@ This will downscale a list of line objs
 '''
 
 
-def downsample(line_objs, n_chunks, method=):
+def downsample(line_objs, n_chunks, method=mode):
     line_chunks = to_chunk(line_objs, n_chunks)
     rv_lines = []
     for i, chunk in enumerate(line_chunks):
@@ -111,16 +124,36 @@ def downsample(line_objs, n_chunks, method=):
             num_spaces.append(line['num_spaces'])
             lens.append(line['len'])
 
-        try:
-            agg_line_obj['start_index'] = method(start_indexes)
-
+        agg_line_obj['start_index'] = method(start_indexes)
         agg_line_obj['num_tabs'] = method(num_tabs)
         agg_line_obj['end_index'] = method(end_indexes)
         agg_line_obj['num_spaces'] = method(num_spaces)
         agg_line_obj['len'] = method(lens)
 
-        rv_lines += agg_line_obj
+        rv_lines.append(agg_line_obj)
     return rv_lines
+
+# all linegroups will be the same length at this stage. we are merging our subcollection into one entry
+
+# TODO: more numpy :)
+
+
+def to_numpy(linegroup_list):
+    # shape: ( supergroup length ie len list of files, methods ) x (max linecount) x (num fields in lineobj)
+    linegroup_list_rv = np.zeros(
+        (len(linegroup_list), max(linegroup_list, key=sortkey_linecollection), 6))
+
+    for i, linegroup in enumerate(linegroup_list):
+        for j, line in enumerate(linegroup['line_objs']):
+            # use the provided index instead of just assuming that lineobjs start at index 0 (only the case for file objs)
+            for k, field in enumerate(line.values()):
+                linegroup_list_rv[i][line['index']][k] = field
+
+    return linegroup_list_rv
+
+
+def merge(linegroup_list):
+    # collect lineobj data into a format we can
 
 
 def scalek(line_container, k, downsampling_method='mode', upsampling_method='nearest_neighbor', merge_method=None):
@@ -143,18 +176,22 @@ def scalek(line_container, k, downsampling_method='mode', upsampling_method='nea
 
     # linegroup clustering; group similarly sized linegroups into k groups.
     line_container.sort(key=sortkey_linecollection)
+    log.debug("# line containers: {}".format(len(line_container)))
+
     line_container = to_chunk(line_container, k)
+
     # TODO: use k means clustering
     # k_means = KMeans(n_clusters=k, max_iter=100)
     # k_means.fit()
     # perform elementwise (line_obj) scaling on each element
-    ret_collection = []
+    merged_and_scaled = []
 
     for line_subcollection in line_container:
         # TODO: find median num_lines (will be length of our aggregated line collection)
         median_count = len(line_subcollection[len(
             line_subcollection) // 2]['line_objs'])
         # for each linegroup in subcollection, up/downscale to fit median line length
+        scaled_subcollection = []
         for linegroup in line_subcollection:
             # if linegroup smaller than median, upscale
             if len(linegroup['line_objs']) < median_count:
@@ -164,9 +201,12 @@ def scalek(line_container, k, downsampling_method='mode', upsampling_method='nea
                     linegroup['line_objs'].append(linegroup['line_objs'][-1])
             else:
                 # split lines into chunks (size of lg // chunksize) + remainder = target size
-                print(len(linegroup['line_objs']))
-                print(median_count)
                 linegroup['line_objs'] = downsample(
                     linegroup['line_objs'], median_count)
+
+            scaled_subcollection.append(linegroup)
+
+        # merge scaled subcollection items
+        print(len(scaled_subcollection))
 
     return line_container
