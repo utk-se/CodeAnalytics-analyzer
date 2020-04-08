@@ -3,25 +3,9 @@ import lizard
 import json
 import re
 from cadistributor import log
-import exceptions
-import statistics
-from sklearn.cluster import KMeans
-
-
-def sortkey_linecollection(lc):
-    return len(lc['line_objs'])
-
-# evenly split a list into n chunks
-
-
-def to_chunk(l, n_chunks):
 
 
 class Analyzer:
-    sampling_methods = {
-        'mode': statistics.mode,
-        'median': statistics.median
-    }
     '''
     Provided a repository, uses static code analysis to output data about
     the shape of code. ie, it outputs information regarding the use of
@@ -97,62 +81,27 @@ class Analyzer:
                     # check num whitespace before non commented line
                     pass
 
+    def export(self, output_path=None, indent=0):
+
+        # get rid of raw line info
+        if not self.output_raw:
+            pass
+        if output_path is not None:
+            # Write the repo object to json
+            with open(output_path, 'w') as outfile:
+                json.dump(repo_obj, outfile, indent=indent)
+
+        return self.repo_obj
+
     '''
     merges or interpolates neighbors in a given line collection to k groups
     TODO: file, method, and class objs refactor to 'line collections' that have the same fields
     will be useful for aggregation stage
     '''
 
-    def agg_scalek(self, line_collection, k, downsampling_method='mode', upsampling_method='nearest_neighbor', merge_method=None):
-        # Upscaling not supported for this dim
-        if len(line_collection) <= 0:
-            raise AggregationException(
-                "Line collection empty. have you run .analyze()?")
+    def analyze(self, input_path):
 
-        if k <= 0 or k < len(line_collection):
-            raise AggregationException(
-                "Expected 0 < k: {} < {}".format(k, len(line_collection)))
-
-        # get sampling methods
-        if type(downsampling_method) is str:
-            if sampling_methods.has_key(downsampling_method):
-                downsampling_method = sampling_methods[downsampling_method]
-            else:
-                raise AggregationException(
-                    "Invalid downsampling identifier: {}".format(downsampling_method))
-
-        # linegroup clustering; group similarly sized linegroups into k groups.
-        line_collection.sort(key=sortkey_linecollection)
-        # TODO: use k means clustering
-        k_means = Kmeans(n_clusters=k, max_iter=100)
-
-        # line_collection =
-
-        # perform elementwise (line_obj) scaling on each element
-        ret_collection = []
-
-        for line_subcollection in line_collection:
-            # TODO: find median linesize (will be length of our aggregated line collection)
-            median_count = len(line_subcollection[len(
-                line_subcollection) // 2]['line_objs'])
-            # for each linegroup in subcollection, up/downscale to fit median size
-            for linegroup in line_subcollection:
-
-                # split lines into chunks (size of lg // chunksize) + remainder = target size
-                chunksize = len(linegroup['line_obj']) // median_count
-            # use downsampling method on each chunk
-
-            # scale each item to median linesize (TODO: configurable)
-        return line_collection
-
-    def agg_freq(self, line_collection, asarray=False):
-        pass
-
-    # def export():
-
-    def analyze(self, input_path, output_path=None):
-
-        repo_obj = {
+        self.repo_obj = {
             "file_objs": [],
             "num_lines": 0,
             "num_files": 0,
@@ -193,7 +142,7 @@ class Analyzer:
                 if file_extension not in self.supported_filetypes:
                     continue
 
-                repo_obj["num_files"] += 1
+                self.repo_obj["num_files"] += 1
                 file_obj = {
                     "num_lines": 0,
                     "file_extension": file_extension,
@@ -212,15 +161,6 @@ class Analyzer:
                     continue
 
                 file_obj["token_count"] = i.token_count
-
-                # Append info about methods
-                for func_dict in i.function_list:
-                    method_obj = {
-                        "start_line": func_dict.__dict__["start_line"],
-                        "end_line": func_dict.__dict__["end_line"],
-                        "token_count": func_dict.__dict__["token_count"]
-                    }
-                    file_obj["methods"].append(method_obj)
 
                 try:
                     # Go thru each line in the file
@@ -250,62 +190,40 @@ class Analyzer:
                             line_obj["end_index"] = len(line.rstrip())
                             # TODO: detecting imports
 
-                            if self.output_raw and line != '\n':
-                                # Add line obj to file obj
-                                file_obj["line_objs"].append(line_obj)
-
-                            # If
-                            if line_num >= repo_obj['max_file_length']:
-
-                                line_freq_obj = {
-                                    "start_indexes": {
-                                        line_obj["start_index"]: 1
-                                    },
-                                    "end_indexes": {
-                                        line_obj["end_index"]: 1
-                                    },
-                                    "num_tabs": line_obj["num_tabs"],
-                                    "num_spaces": line_obj["num_spaces"],
-                                }
-                                repo_obj["line_freqs"].append(line_freq_obj)
-                            else:
-                                if line_obj["start_index"] not in repo_obj["line_freqs"][line_num]["start_indexes"].keys():
-                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] = 1
-                                else:
-                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] += 1
-
-                                if line_obj["end_index"] not in repo_obj["line_freqs"][line_num]["end_indexes"].keys():
-                                    repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["start_index"]] = 1
-                                else:
-                                    repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["end_index"]] += 1
-
-                                repo_obj["line_freqs"][line_num]["num_tabs"] += line_obj["num_tabs"]
-                                repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
+                            # Add line obj to file obj
+                            file_obj["line_objs"].append(line_obj)
 
                 except Exception as e:
                     # TODO: add logger & note error
                     log.err("Unexpected error: " + str(e))
                     continue
 
+                # Append info about methods
+                for func_dict in i.function_list:
+                    method_obj = {
+                        "start_line": func_dict.__dict__["start_line"],
+                        "end_line": func_dict.__dict__["end_line"],
+                        "token_count": func_dict.__dict__["token_count"],
+                        "line_objs": []
+                    }
+                    method_obj['line_objs'] = [l for l in file_obj['line_objs']
+                                               [method_obj['start_line']:method_obj['end_line']]]
+                    file_obj["methods"].append(method_obj)
+
                 # Add file obj to repo obj
-                repo_obj["file_objs"].append(file_obj)
+                self.repo_obj["file_objs"].append(file_obj)
 
                 # Max file length
-                if repo_obj["max_file_length"] < file_obj["num_lines"]:
-                    repo_obj["max_file_length"] = file_obj["num_lines"]
+                if self.repo_obj["max_file_length"] < file_obj["num_lines"]:
+                    self.repo_obj["max_file_length"] = file_obj["num_lines"]
 
         # Sum linecount
-        for obj in repo_obj["file_objs"]:
-            repo_obj["num_lines"] += obj["num_lines"]
+        for obj in self.repo_obj["file_objs"]:
+            self.repo_obj["num_lines"] += obj["num_lines"]
 
         # get average lines per file
-        if repo_obj["num_files"] > 0:
-            repo_obj["avg_file_length"] = repo_obj["num_lines"] / \
-                repo_obj["num_files"]
+        if self.repo_obj["num_files"] > 0:
+            self.repo_obj["avg_file_length"] = self.repo_obj["num_lines"] / \
+                self.repo_obj["num_files"]
 
-        if output_path is not None:
-            # Write the repo object to json
-            with open(output_path, 'w') as outfile:
-                json.dump(repo_obj, outfile, indent=2)
-
-        return repo_obj
+        return self.repo_obj
