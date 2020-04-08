@@ -27,6 +27,11 @@
 - frequency count
 - mean/median
 - raw
-- deviation scaled
+- deviation scaled / average pooling
 - maximum
 - all
+
+# Scaled deviation??
+
+- Average pooling across lines (where output is avg length of method)
+- Result - # of lines is method. All begin idx
