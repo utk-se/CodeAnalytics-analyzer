@@ -98,11 +98,12 @@ This will downscale a list of line objs
 
 
 def downsample(line_objs, n_chunks, method=mode):
+    # assumes successive block of lineobjs
     line_chunks = to_chunk(line_objs, n_chunks)
     rv_lines = []
     for i, chunk in enumerate(line_chunks):
         agg_line_obj = {
-            "index": i,
+            "index": 0,
             # int specifying where line starts
             "start_index": None,
             "num_tabs": 0,  # boolean for existence
@@ -111,19 +112,22 @@ def downsample(line_objs, n_chunks, method=mode):
             "len": 0
         }
         # get mode of each thing
-        # TODO: probably a much better way to do this but mode doesn't support key=?
+        # TODO: update to numpy
         start_indexes = []
+        indexes = []
         num_tabs = []
         end_indexes = []
         num_spaces = []
         lens = []
         for line in chunk:
+            indexes.append(line['index'])
             start_indexes.append(line['start_index'])
             num_tabs.append(line['num_tabs'])
             end_indexes.append(line['end_index'])
             num_spaces.append(line['num_spaces'])
             lens.append(line['len'])
 
+        agg_line_obj['index'] = min(indexes)
         agg_line_obj['start_index'] = method(start_indexes)
         agg_line_obj['num_tabs'] = method(num_tabs)
         agg_line_obj['end_index'] = method(end_indexes)
@@ -140,20 +144,27 @@ def downsample(line_objs, n_chunks, method=mode):
 
 def to_numpy(linegroup_list):
     # shape: ( supergroup length ie len list of files, methods ) x (max linecount) x (num fields in lineobj)
+    # TODO: method position vs length matter?
     linegroup_list_rv = np.zeros(
-        (len(linegroup_list), max(linegroup_list, key=sortkey_linecollection), 6))
+        (len(linegroup_list), len(max(linegroup_list, key=sortkey_linecollection)['line_objs']), 6))
 
     for i, linegroup in enumerate(linegroup_list):
         for j, line in enumerate(linegroup['line_objs']):
             # use the provided index instead of just assuming that lineobjs start at index 0 (only the case for file objs)
             for k, field in enumerate(line.values()):
-                linegroup_list_rv[i][line['index']][k] = field
+                linegroup_list_rv[i][j][k] = field
 
     return linegroup_list_rv
 
 
 def merge(linegroup_list):
-    # collect lineobj data into a format we can
+    # convert to numpy array (will eventually make everything use np format
+    # to_numpy is bridging the gap for now since I want to get some results)
+    if not isinstance(linegroup_list, np.ndarray):
+        linegroup_list = to_numpy(linegroup_list)
+
+    # (filelengths should be the same at this point - )
+    return np.mean(linegroup_list, axis=0).astype(int)
 
 
 def scalek(line_container, k, downsampling_method='mode', upsampling_method='nearest_neighbor', merge_method=None):
@@ -194,12 +205,7 @@ def scalek(line_container, k, downsampling_method='mode', upsampling_method='nea
         scaled_subcollection = []
         for linegroup in line_subcollection:
             # if linegroup smaller than median, upscale
-            if len(linegroup['line_objs']) < median_count:
-                # use upscaling method to meet target line length
-                # just add a bunch of blank lines essentially
-                while len(linegroup['line_objs']) < median_count:
-                    linegroup['line_objs'].append(linegroup['line_objs'][-1])
-            else:
+            if len(linegroup['line_objs']) >= median_count:
                 # split lines into chunks (size of lg // chunksize) + remainder = target size
                 linegroup['line_objs'] = downsample(
                     linegroup['line_objs'], median_count)
@@ -208,5 +214,5 @@ def scalek(line_container, k, downsampling_method='mode', upsampling_method='nea
 
         # merge scaled subcollection items
         print(len(scaled_subcollection))
-
-    return line_container
+        merged_and_scaled.append(merge(scaled_subcollection))
+    return merged_and_scaled
