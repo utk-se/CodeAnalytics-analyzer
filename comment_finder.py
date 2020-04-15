@@ -9,8 +9,8 @@ def find_comments(path, lang, verbose=0):
             single_quote_hash = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\#.*?")
             single_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}.*\'{3}?")
             single_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}.*\'{3}?")
-            double_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}.*\"{3}?")
-            double_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}.*\"{3}?")
+            double_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\"{3}.*\"{3}?")
+            double_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\"{3}.*\"{3}?")
             single_quote_begin_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}?")
             single_quote_begin_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}?")
             double_quote_begin_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\"{3}?")
@@ -71,12 +71,46 @@ def find_comments(path, lang, verbose=0):
                             print("hash on", num+1)
             if verbose:
                 print("DONE HASH")
-        elif lang == 'c':
-            pass
-        elif lang == 'java':
-            pass
-        elif lang == 'js':
-            pass
+        ####################################################################################################
+        elif lang == 'c' or lang == 'java' or lang == 'js':
+            single_line = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/?")
+            one_line_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}.*[*]{1}\/?")
+            begin_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}?")
+            end_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*[*]{1}\/?")
+            skip_lines = []
+            for num, line in enumerate(content):
+                if one_line_block.match(line):
+                    lines.append(num)
+                    skip_lines.append(num)
+                    if verbose:
+                        print("block on", num + 1)
+            if verbose:
+                print("DONE ONE LINE BLOCKS")
+            for num, line in enumerate(content):
+                if num not in skip_lines and begin_block.match(line):
+                    lines.append(num)
+                    skip_lines.append(num)
+                    if verbose:
+                        print("block on", num + 1)
+                    for num2, line2 in enumerate(content[num + 1:]):
+                        num2 += (num + 1)
+                        lines.append(num2)
+                        skip_lines.append(num2)
+                        if verbose:
+                            print("block on", num2 + 1)
+                        if end_block.match(line2):
+                            break
+            if verbose:
+                print("DONE COMMENT BLOCKS")
+            for num, line in enumerate(content):
+                if num not in skip_lines:
+                    if single_line.match(line):
+                        lines.append(num)
+                        if verbose:
+                            print("slashes on", num + 1)
+            if verbose:
+                print("DONE SLASHES")
+        ####################################################################################################
         else:
             print(lang, "not supported yet")
             exit()

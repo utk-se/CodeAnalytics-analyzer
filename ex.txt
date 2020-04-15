@@ -1,0 +1,17 @@
+/* C program to illustrate
+
+use of
+multi-line comment */
+#include <stdio.h>
+int main(void)
+{
+
+/* one liner */
+
+    /* Multi-line Welcome user comment
+    written to demonstrate comments
+    in C/C++ */
+    printf("Welcome to GeeksforGeeks");
+    // im a comment
+    return 0;
+}
