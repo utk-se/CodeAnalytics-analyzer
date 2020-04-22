@@ -1,4 +1,3 @@
-import argparse
 import os
 import lizard
 import json
@@ -65,7 +64,7 @@ class Analyzer:
 
         self.repo_obj = None
 
-        #log.debug("Analyzer instance created.")
+        log.debug("Analyzer instance created.")
 
     '''
     returns the serializable dictionary that can be outputted as a json file
@@ -82,9 +81,27 @@ class Analyzer:
                     # check num whitespace before non commented line
                     pass
 
-    def analyze(self, input_path, output_path=None):
+    def export(self, output_path=None, indent=0):
 
-        repo_obj = {
+        # get rid of raw line info
+        if not self.output_raw:
+            pass
+        if output_path is not None:
+            # Write the repo object to json
+            with open(output_path, 'w') as outfile:
+                json.dump(repo_obj, outfile, indent=indent)
+
+        return self.repo_obj
+
+    '''
+    merges or interpolates neighbors in a given line collection to k groups
+    TODO: file, method, and class objs refactor to 'line collections' that have the same fields
+    will be useful for aggregation stage
+    '''
+
+    def analyze(self, input_path):
+
+        self.repo_obj = {
             "file_objs": [],
             "num_lines": 0,
             "num_files": 0,
@@ -125,7 +142,7 @@ class Analyzer:
                 if file_extension not in self.supported_filetypes:
                     continue
 
-                repo_obj["num_files"] += 1
+                self.repo_obj["num_files"] += 1
                 file_obj = {
                     "num_lines": 0,
                     "file_extension": file_extension,
@@ -144,15 +161,6 @@ class Analyzer:
                     continue
 
                 file_obj["token_count"] = i.token_count
-
-                # Append info about methods
-                for func_dict in i.function_list:
-                    method_obj = {
-                        "start_line": func_dict.__dict__["start_line"],
-                        "end_line": func_dict.__dict__["end_line"],
-                        "token_count": func_dict.__dict__["token_count"]
-                    }
-                    file_obj["methods"].append(method_obj)
 
                 try:
                     # Go thru each line in the file
@@ -182,62 +190,40 @@ class Analyzer:
                             line_obj["end_index"] = len(line.rstrip())
                             # TODO: detecting imports
 
-                            if self.output_raw and line != '\n':
-                                # Add line obj to file obj
-                                file_obj["line_objs"].append(line_obj)
-
-                            # If
-                            if line_num >= repo_obj['max_file_length']:
-
-                                line_freq_obj = {
-                                    "start_indexes": {
-                                        line_obj["start_index"]: 1
-                                    },
-                                    "end_indexes": {
-                                        line_obj["end_index"]: 1
-                                    },
-                                    "num_tabs": line_obj["num_tabs"],
-                                    "num_spaces": line_obj["num_spaces"],
-                                }
-                                repo_obj["line_freqs"].append(line_freq_obj)
-                            else:
-                                if line_obj["start_index"] not in repo_obj["line_freqs"][line_num]["start_indexes"].keys():
-                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] = 1
-                                else:
-                                    repo_obj["line_freqs"][line_num]["start_indexes"][line_obj["start_index"]] += 1
-
-                                if line_obj["end_index"] not in repo_obj["line_freqs"][line_num]["end_indexes"].keys():
-                                    repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["start_index"]] = 1
-                                else:
-                                    repo_obj["line_freqs"][line_num]["end_indexes"][line_obj["end_index"]] += 1
-
-                                repo_obj["line_freqs"][line_num]["num_tabs"] += line_obj["num_tabs"]
-                                repo_obj["line_freqs"][line_num]["num_spaces"] += line_obj["num_tabs"]
+                            # Add line obj to file obj
+                            file_obj["line_objs"].append(line_obj)
 
                 except Exception as e:
                     # TODO: add logger & note error
                     log.err("Unexpected error: " + str(e))
                     continue
 
+                # Append info about methods
+                for func_dict in i.function_list:
+                    method_obj = {
+                        "start_line": func_dict.__dict__["start_line"],
+                        "end_line": func_dict.__dict__["end_line"],
+                        "token_count": func_dict.__dict__["token_count"],
+                        "line_objs": []
+                    }
+                    method_obj['line_objs'] = [l for l in file_obj['line_objs']
+                                               [method_obj['start_line']:method_obj['end_line']]]
+                    file_obj["methods"].append(method_obj)
+
                 # Add file obj to repo obj
-                repo_obj["file_objs"].append(file_obj)
+                self.repo_obj["file_objs"].append(file_obj)
 
                 # Max file length
-                if repo_obj["max_file_length"] < file_obj["num_lines"]:
-                    repo_obj["max_file_length"] = file_obj["num_lines"]
+                if self.repo_obj["max_file_length"] < file_obj["num_lines"]:
+                    self.repo_obj["max_file_length"] = file_obj["num_lines"]
 
         # Sum linecount
-        for obj in repo_obj["file_objs"]:
-            repo_obj["num_lines"] += obj["num_lines"]
+        for obj in self.repo_obj["file_objs"]:
+            self.repo_obj["num_lines"] += obj["num_lines"]
 
         # get average lines per file
-        if repo_obj["num_files"] > 0:
-            repo_obj["avg_file_length"] = repo_obj["num_lines"] / \
-                repo_obj["num_files"]
+        if self.repo_obj["num_files"] > 0:
+            self.repo_obj["avg_file_length"] = self.repo_obj["num_lines"] / \
+                self.repo_obj["num_files"]
 
-        if output_path is not None:
-            # Write the repo object to json
-            with open(output_path, 'w') as outfile:
-                json.dump(repo_obj, outfile, indent=2)
-
-        return repo_obj
+        return self.repo_obj
