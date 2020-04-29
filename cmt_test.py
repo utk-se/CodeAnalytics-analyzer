@@ -1,4 +1,3 @@
-import comment_finder
+import id_finder
 
-lines = comment_finder.find_comments("ex.txt", 'c', verbose=1)
-print(lines)
+id_finder.find_ids("ex.txt", 'c', skip_lines=[0, 1, 2, 3], verbose=1)
