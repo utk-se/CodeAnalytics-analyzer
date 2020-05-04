@@ -1,18 +1,13 @@
 # CodeAnalytics-analyzer
 
-Aiden and Jonathan:
+CodeAnalytics is a framework comprised of both an analyzer and distributor module for the purpose of aggregating github repository information given a cloned repo (i.e number of files, length of files, popularity of the repo, and mch more). Using the information gathered by these modules, it is possible to observe the general shape/structure of code for each unique repo.
 
- - Given the path to a repo of code
- - Run analysis for all data points specified in metrics points (look at [lizard](https://github.com/terryyin/lizard))
- - Return results in a file based parseable format
+## Supported File Types
 
-## Pip Dependencies
-
-To install, type: pip install -r requirements.txt
-
-* lizard - https://github.com/terryyin/lizard
-* PyDriller - https://github.com/ishepard/pydriller
-* argparse
+- Java
+- Python
+- C++/C
+- JavaScript
 
 ## Output Format
 
@@ -46,6 +41,11 @@ The output of this analyzer will follow this format in a json file for a given r
 
 ```
 
-## Other Dependencies
+## List of Dependencies
+
+To install, type: pip install -r requirements.txt
+
+* lizard - https://github.com/terryyin/lizard
+* PyDriller - https://github.com/ishepard/pydriller
 * Git
 * Python3
