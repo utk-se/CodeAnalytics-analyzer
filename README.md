@@ -49,3 +49,7 @@ To install, type: pip install -r requirements.txt
 * PyDriller - https://github.com/ishepard/pydriller
 * Git
 * Python3
+
+## Pip Installation
+
+> IN PROGRESS
