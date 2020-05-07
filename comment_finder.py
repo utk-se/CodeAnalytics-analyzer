@@ -6,15 +6,15 @@ def find_comments(path, lang, verbose=0):
         content = f.readlines()
         if lang == 'py':
             double_quote_hash = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\#.*?")
-            single_quote_hash = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\#.*?")
-            single_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}.*\'{3}?")
-            single_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}.*\'{3}?")
-            double_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\"{3}.*\"{3}?")
-            double_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\"{3}.*\"{3}?")
-            single_quote_begin_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}?")
-            single_quote_begin_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}?")
-            double_quote_begin_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\"{3}?")
-            double_quote_begin_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\"{3}?")
+            single_quote_hash = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\#.*")
+            single_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}.*\'{3}")
+            single_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}.*\'{3}")
+            double_quote_one_line_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\"{3}.*\"{3}")
+            double_quote_one_line_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\"{3}.*\"{3}")
+            single_quote_begin_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\'{3}")
+            single_quote_begin_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\'{3}")
+            double_quote_begin_block1 = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\"{3}")
+            double_quote_begin_block2 = re.compile("^[^(\')]*((\')[^(\')]*(\')[^(\')]*)*\"{3}")
             single_quote_end_block = re.compile(".*\'{3}")
             double_quote_end_block = re.compile(".*\"{3}")
             skip_lines = []
@@ -73,10 +73,10 @@ def find_comments(path, lang, verbose=0):
                 print("DONE HASH")
         ####################################################################################################
         elif lang == 'c' or lang == 'java' or lang == 'js':
-            single_line = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/?")
-            one_line_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}.*[*]{1}\/?")
-            begin_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}?")
-            end_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*[*]{1}\/?")
+            single_line = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/")
+            one_line_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}.*[*]{1}\/")
+            begin_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}")
+            end_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*[*]{1}\/")
             skip_lines = []
             for num, line in enumerate(content):
                 if one_line_block.match(line):

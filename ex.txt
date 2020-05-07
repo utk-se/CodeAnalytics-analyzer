@@ -1,17 +1,32 @@
-/* C program to illustrate
+/* Created by Chaitanya for Beginnersbook.com
+ * C program to create, initialize and access a pointer
+ */
 
-use of
-multi-line comment */
 #include <stdio.h>
-int main(void)
+
+int main()
 {
+	//char variable
+    char ch;
 
-/* one liner */
+    //char pointer
+    char *pCh;
 
-    /* Multi-line Welcome user comment
-    written to demonstrate comments
-    in C/C++ */
-    var = printf(test(), "Welcome to GeeksforGeeks");
-    // im a comment
-    return 0;
+    /* Initializing pointer variable with the
+     * address of variable ch
+     */
+    pCh = &ch;
+
+    //Assigning value to the variable ch
+    ch = 'A';
+
+    //access value and address of ch using variable ch
+    printf("Value of ch: %c\n",ch);
+    printf("Address of ch: %p\n",&ch);
+
+    //access value and address of ch using pointer variable pCh
+    printf("Value of ch: %c\n",*pCh);
+    printf("Address of ch: %p",pCh);
+
+   return 0;
 }
