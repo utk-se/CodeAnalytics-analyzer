@@ -27,7 +27,6 @@ java_keywords = ['abstract', 'assert', 'boolean', 'break', 'byte', 'case', 'catc
                  'switch', 'synchronized', 'this', 'throw', 'throws', 'transient', 'try', 'var', 'void', 'volatile',
                  'while']
 
-
 def find_ids(path, lang, skip_lines=[], verbose=0):
     with open(path, 'r') as f:
         content = f.readlines()
@@ -35,8 +34,37 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
         unique_ids = set()
         final_unique = set()
         if lang == 'py':
-            pass
+            import symtable
+            ids_from_tables = set()
+
+            def recurse_py_tables(sym_tab):
+                nonlocal id_counter
+                ids_from_tables.update(list(sym_tab.get_identifiers()))
+                id_counter += len(list(sym_tab.get_identifiers()))
+                if sym_tab.has_children():
+                    for child in sym_tab.get_children():
+                        recurse_py_tables(child)
+
+            my_table = symtable.symtable(code=''.join(content), filename='string', compile_type='exec')
+            recurse_py_tables(my_table)
+            unique_ids = ids_from_tables
         elif lang == 'c':
+            from pycparser import c_parser, parse_file
+            import sys
+            sys.path.extend(['.', '..'])
+            import os
+            os.chdir(os.path.dirname(__file__))
+            if os.name == 'nt':
+                ast = parse_file(os.getcwd() + r'\ex.txt', use_cpp=True, cpp_args=r'-Ifake_libc_include')
+            else:
+                ast = parse_file(os.getcwd() + '/ex.txt', use_cpp=True, cpp_args=r'-Ifake_libc_include')
+            pattern = re.compile("ID\(name='.*'")
+            l_ast = str(ast).split('\n')
+            for ast_line in l_ast:
+                if bool(re.search(pattern, ast_line)):
+                    id_counter += 1
+                    unique_ids.add(re.findall(pattern, ast_line)[0][9:-1])
+            '''
             id_pattern = re.compile('\**[a-zA-Z_][a-zA-Z0-9_]*(;|,|\[.*\]|=.*)*')
             func_pattern = re.compile('([a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*(\(.*\))')
             for num in range(len(content)):
@@ -66,8 +94,7 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                             matches.add(each)
                             id_counter += 1
                     unique_ids.update(list(matches))
-            print(unique_ids)
-            print("num ids:", id_counter)
+            '''
         elif lang == 'c++':
             id_pattern = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
             func_pattern = re.compile('([a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*(\(.*\))')
@@ -98,8 +125,6 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                             matches.add(each)
                             id_counter += 1
                     unique_ids.update(list(matches))
-            print(unique_ids)
-            print("num ids:", id_counter)
         elif lang == 'java':
             id_pattern = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
             func_pattern = re.compile('([a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*(\(.*\))')
@@ -130,8 +155,9 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                             matches.add(each)
                             id_counter += 1
                     unique_ids.update(list(matches))
-            print(unique_ids)
-            print("num ids found:", id_counter)
+
+        print(unique_ids)
+        print("num ids found:", id_counter)
 
         for one_id in unique_ids:
             if one_id.startswith('*') or one_id.startswith('&'):

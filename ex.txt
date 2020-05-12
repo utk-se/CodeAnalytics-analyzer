@@ -1,32 +1,25 @@
-/* Created by Chaitanya for Beginnersbook.com
- * C program to create, initialize and access a pointer
- */
-
 #include <stdio.h>
+int main() {
+    int low, high, i, flag, nr;
+    printf("Enter two numbers(intervals): ");
+    scanf("%d %d", &low, &high);
+    printf("Prime numbers between %d and %d are: ", low, high);
 
-int main()
-{
-	//char variable
-    char ch;
+    while (low < high) {
+        flag = 0; // yo
 
-    //char pointer
-    char *pCh;
+        // if low is a non-prime number, flag will be 1
+        for (i = 2; i <= low / 2; ++i) {
+            if (low % i == 0) {
+                flag = 1;
+                break;
+            }
+        }
 
-    /* Initializing pointer variable with the
-     * address of variable ch
-     */
-    pCh = &ch;
+        if (flag == 0)
+            nr = printf("%d ", low);
+        ++low;
+    }
 
-    //Assigning value to the variable ch
-    ch = 'A';
-
-    //access value and address of ch using variable ch
-    printf("Value of ch: %c\n",ch);
-    printf("Address of ch: %p\n",&ch);
-
-    //access value and address of ch using pointer variable pCh
-    printf("Value of ch: %c\n",*pCh);
-    printf("Address of ch: %p",pCh);
-
-   return 0;
+    return 0;
 }
