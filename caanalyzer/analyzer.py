@@ -204,7 +204,7 @@ class Analyzer:
                         "start_line": func_dict.__dict__["start_line"],
                         "end_line": func_dict.__dict__["end_line"],
                         "token_count": func_dict.__dict__["token_count"],
-                        "line_objs": []
+                        "line_objs": []z
                     }
                     method_obj['line_objs'] = [l for l in file_obj['line_objs']
                                                [method_obj['start_line']:method_obj['end_line']]]

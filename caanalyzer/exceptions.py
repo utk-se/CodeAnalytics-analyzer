@@ -1,0 +1,3 @@
+
+class UnsupportedLanguageException(BaseException):
+    pass
