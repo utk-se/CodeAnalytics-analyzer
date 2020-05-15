@@ -10,6 +10,26 @@ with a start and end index, you should use this.
 
 If you are instead calculating a scalar or aggregated metric from a code
 segment or collection of code segments, use a metric. (See metrics.py)
+
+Default Tokenizer: FileTokenizer
+
+Tokenizers todo:
+TODO: ClassDeclaration
+TODO: MethodDeclaration
+TODO: Tokenizer (non whitespace)
+TODO: ImportTokenizer
+TODO: AssignmentTokenizer
+TODO: CommentTokenizer
+TODO: IdentifierTokenizer
+TODO: make lines newline separated by default
+
+TODO: AST can process many tokens at once: MultiTokenizer
+TODO: Tokenizer merging
+
+dict output
+{
+    'tokenizer/column keys 1' : [linestart, linestop, charstart, charend]
+}
 '''
 
 
@@ -22,14 +42,35 @@ class BaseTokenizer:
 
     # unique identifier for shorthand use
     @staticmethod
-    def get_name():
+    def keys():
         raise NotImplementedError
     '''
     return a list of start & end indexes
     '''
     @staticmethod
+    # List[Callable[[str], List[Tuple[int, int, int, int]]]]
     def tokenize(self, codestr):
         raise NotImplementedError('Use a subclass')
+
+
+'''
+Use this class to parse multiple token types in one sweep of the input.
+(n_token_types, n_tokens, start:endinfo)
+'''
+
+
+class MultiTokenizer(BaseTokenizer):
+    @staticmethod
+    def get_supported_filetypes():
+        raise NotImplementedError
+
+    # unique identifier for shorthand use
+    @staticmethod
+    def keys():
+        raise NotImplementedError
+
+    def tokenize(self, codestr):
+        return super().tokenize(self, codestr)
 
 
 '''
@@ -44,8 +85,8 @@ class FileTokenizer(BaseTokenizer):
         return ['py', 'cpp', 'js', 'h', 'java']
 
     @staticmethod
-    def get_name():
-        return 'file'
+    def keys():
+        return ['file']
 
     @staticmethod
     def tokenize(self, codestr):
@@ -81,8 +122,8 @@ class MethodTokenizer(BaseTokenizer):
         return ['py', 'cpp', 'js', 'h', 'java']
 
     @staticmethod
-    def get_name():
-        return 'method'
+    def keys():
+        return ['method']
 
     # this method assumes that method starts at start of line
     # and it's probably pretty slow
@@ -94,6 +135,7 @@ class MethodTokenizer(BaseTokenizer):
         i = lizard.analyze_file.analyze_source_code(lang, codestr)
         rv = np.zeros((len(i.function_list), 2))
         for j, func in enumerate(i.function_list):
+            # TODO: replace this junk with line based ops
             start_idx = findnth(codestr, '\n', func.start_line-1)+1
             end_idx = findnth(codestr, '\n', func.end_line-1)
 
@@ -105,8 +147,8 @@ class NewlineTokenizer(BaseTokenizer):
         return ['py', 'cpp', 'js', 'h', 'java']
 
     @staticmethod
-    def get_name():
-        return 'newline'
+    def keys():
+        return ['newline']
 
     @staticmethod
     def tokenize(codestr, lang):
@@ -119,8 +161,8 @@ class ClassTokenizer(BaseTokenizer):
         return ['py', 'cpp', 'js', 'h', 'java']
 
     @staticmethod
-    def get_name():
-        return 'class'
+    def keys():
+        return ['class']
 
     # @staticmethod
     # def tokenize(self, codestr):
