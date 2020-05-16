@@ -24,25 +24,50 @@ ie, df.index_repo(), df.mean() versus repo.df.mean(), repo.index()
 
 class CodeRepo:
     # TODO: type annotate this
-    def __init__(self, input_path, dataframe=pd.DataFrame(), languages=['.py', '.cpp', '.js', '.h', '.java'],
-                 debug=False):
+    def __init__(self, input_path, dataframe=pd.DataFrame(), languages=['.py', '.cpp', '.js', '.h', '.java']):
 
-        # self.debug = debug
-        self.root_path = input_path
-        self.supported_filetypes = ['.py', '.cpp', '.js', '.h', '.java']
-        hasher = md5()
+        self.supported_filetypes = set(
+            ['.py', '.cpp', '.js', '.h', '.java']) & set(languages)
+
         # make sure that specified languages are supported
         for extension in languages:
             if extension not in self.supported_filetypes:
                 raise UnsupportedLanguageException(
                     '{} is not a supported file extension. Supported file extensions include {}'.format(extension, self.supported_filetypes))
 
-        self.file_paths = []
-        self.file_extensions = []
-        self.num_directories = 0
-        self.num_extensions = 0
-        self.max_depth = 0
-        self.num_files = 0
+        self.register_path(input_path, append=False)
+
+        self.default_columns = ['line_start', 'line_end', 'char_start',
+                                'char_end']
+
+        # get intersection of specified languages and existing languages
+        log.info('languages found: {}'.format(self.languages))
+        log.info('number of valid files found: {}'.format(len(self.file_paths)))
+
+        self.indexed = False
+        # TODO: robustness: check for malformed input dataframes
+        self.tokenizers = None
+        self.metrics = None
+        self.tokenizer_names = []
+        self.metric_names = []
+
+    '''
+    For now, only track one path at a time. The code is developed
+    in such a way that it should straightforward to track multiple.
+    Append = true: Collect stats and add files to index from a new repository
+    as well as old.
+    '''
+
+    def register_path(self, input_path, append=True):
+        if not append:
+            self.file_paths = []
+            self.file_extensions = []
+            self.num_directories = 0
+            self.num_extensions = 0
+            self.max_depth = 0
+            self.num_files = 0
+
+        self.root_path = input_path
 
         if not os.path.exists(input_path):
             raise FileNotFoundError('{} does not exist'.format(input_path))
@@ -64,30 +89,84 @@ class CodeRepo:
 
             for filep in files:
                 file_path = subdir + os.sep + filep
+                file_path = Path(file_path)
 
                 # get file extension
-                file_extension = Path(file_path).suffix
+                file_extension = file_path.suffix
                 file_extensions.add(file_extension)
 
                 if file_extension not in languages:
                     continue
 
-                self.file_paths.append(file_path)
+                self.file_paths.append(str(file_path))
                 self.file_extensions.append(file_extension)
 
         self.num_extensions = len(list(file_extensions))
+        self.languages = set(self.languages) & file_extensions
         # self.df = dataframe
 
-        self.default_columns = ['line_start', 'line_end', 'char_start',
-                                'char_end']
+    def unprocessed_tokens(self):
+        if self.tokenizers is None:
+            return []
+        elif not df.empty:
+            return set(flatten_list(self.tokenizer_names)) - \
+                set(self.df.index.get_level_values('token_type').unique())
+        else:
+            return flatten_list(self.tokenizer_names)
 
-        # get intersection of specified languages and existing languages
-        self.languages = set(languages) & file_extensions
-        log.info('languages found: {}'.format(self.languages))
-        log.info('number of valid files found: {}'.format(len(self.file_paths)))
+    '''
+    return metrics present in the index
+    '''
 
-        # TODO: robustness: check for malformed input dataframes
+    def unprocessed_metrics(self):
+        if self.metrics is None:
+            return []
+        elif not df.empty:
+            return set(self.metric_names) - set(self.df.columns)
+        else:
+            return self.metric_names
 
+    '''
+    return files that have been indexed
+    '''
+
+    def unprocessed_files(self):
+        if not df.empty:
+            return set(self.file_paths) - set(
+                self.df.index.get_level_values('file_path').unique())
+        else:
+            return self.file_paths
+
+    '''
+    Retrieve previously processed filenames.
+    if intersection=True, return only filenames that exist 
+    within the scope of the current repository
+    '''
+
+    def processed_files(self, intersection=False):
+        if self.df.empty:
+            return []
+        elif intersection:
+            return set(self.file_paths) & set(
+                self.df.index.get_level_values('file_path').unique())
+        else:
+            return self.df.index.get_level_values('file_path').unique()
+
+    def processed_metrics(self, intersection=False):
+        if self.df.empty:
+            return []
+        elif intersection:
+            return set(
+                self.df.columns) & set(self.metric_names)
+        else:
+            return list(self.df.columns)
+
+    '''
+    return true if a repository has been indexed
+    '''
+
+    def indexed(self):
+        return self.indexed
     '''
     Index the code repository into a dataframe for metric gathering
     For each file, and each type of token
@@ -101,37 +180,12 @@ class CodeRepo:
     no new files       do nothing     add & populate columns, no new rows
     new/modified files add new rows   do above, then add new rows
 
+    Skip other files: If filepaths from outside the repo are found in the dataframe,
+    do not attempt to load them. Keep this 'True' if you don't intend 
+    to mix data from multiple repositories.
     '''
 
-    '''
-    Return token types tracked by the index
-    '''
-
-    def tokenizers(self):
-        pass
-
-    '''
-    return languages present in the index
-    '''
-
-    def languages(self):
-        pass
-
-    '''
-    return metrics present in the index
-    '''
-
-    def metrics(self):
-        pass
-
-    '''
-    return files that have been indexed
-    '''
-
-    def files(self):
-        pass
-
-    def index(self, tokenizers, metrics: List[Callable[[str], Num]],):
+    def index(self, tokenizers, metrics: List[Callable[[str], Num]]):
         # TODO: verify language support from tokenizers
         self.tokenizers = tokenizers
         self.metrics = metrics
@@ -144,40 +198,19 @@ class CodeRepo:
 
         self.metric_names = list(self.metrics.keys())
 
-        # check for existing table entries
-
         # determine non-preexisting metrics to save time if reindexing or
         # provided dataframe at initialization
-        new_tokenizers = []
-        new_metrics = []
-        new_files = []
-        existing_files = []
-        existing_metrics = []
-        if not self.df.empty:
-            try:
-                new_tokenizers = set(flatten_list(self.tokenizer_names)) - \
-                    set(self.df.index.get_level_values('token_type').unique())
-                new_metrics = set(self.metric_names) - set(self.df.columns)
-                existing_metrics = set(
-                    self.df.columns) ^ set(self.metric_names)
-                # consider storing only files in our current repo,
-                # ie, set intersection
-                existing_files = set(self.metric_names) ^ set(
-                    self.df.index.get_level_values('file_path').unique())
 
-                new_files = set(
-                    self.file_paths) - existing_files
-            except Exception as e:
-                raise MalformedDataFrameException(
-                    'Malformed dataframe received. {}'.format(e))
-        else:
-            new_tokenizers = flatten_list(self.tokenizer_names)
-            new_metrics = self.metrics
-            new_files = self.file_paths
+        new_tokenizers = self.unprocessed_tokens()
+        new_metrics = self.unprocessed_metrics()
+        new_files = self.unprocessed_files()
+        existing_files = self.processed_files()
+        existing_metrics = self.existing_metrics()
 
         # iterate through existing files and calculate any new metrics
         # if we have new tokenizers or new metrics we will have to revisit all files
-        if len(new_tokenizers) != 0 or len(new_metrics) != 0:
+        # New
+        if len(new_tokenizers) != 0:
 
             # if we have existing files, process these first with
             # the updated metrics
@@ -208,17 +241,23 @@ class CodeRepo:
                                 mv.append([self.metrics[mm](substr)
                                            for mm in new_metrics])
 
+                            # TODO: ensure that columns for metrics are passed the correct values
                             df_dict[(lang, input_path, k)] = np.concatenate(
-                                (v, np.array(mv)))
+                                (v, np.array(mv)), axis=1)
 
-                    # run pre-existing metrics on the new row entries
+        # process new metrics for all files
+        if len(new_metrics != 0):
+            pass
+
+        # process new files (metrics and tokenizers)
 
         mi = pd.MultiIndex.from_product([self.languages, self.file_paths, flatten_list(self.tokenizer_names)], names=[
             'language', 'file_path', 'token_type'])
         self.df = self.df.reindex(
             index=mi, columns=self.default_columns + self.metric_names)
 
-        # loop through df, iterate on files and populate na
+        self.indexed = True
+        log.info('Repository {} indexed for analysis'.format(self.root_path))
 
 
 '''
