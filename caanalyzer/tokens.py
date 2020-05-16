@@ -93,6 +93,21 @@ class FileTokenizer(BaseTokenizer):
         return np.array([0, len(codestr)-1])
 
 
+class LineTokenizer(BaseTokenizer):
+
+    @staticmethod
+    def get_supported_filetypes():
+        return ['py', 'cpp', 'js', 'h', 'java']
+
+    @staticmethod
+    def keys():
+        return ['newline']
+
+    @staticmethod
+    def tokenize(codestr, lang):
+        return np.array(splitWithIndices(codestr, '\n'))
+
+
 '''
 return all tokens matching patterns for methods
 
@@ -133,11 +148,26 @@ class MethodTokenizer(BaseTokenizer):
     @staticmethod
     def tokenize(codestr, lang):
         i = lizard.analyze_file.analyze_source_code(lang, codestr)
-        rv = np.zeros((len(i.function_list), 2))
+        codestr_split = codestr.split('\n')
+        rv = {}
+        for key in keys():
+            rv[key] = {
+                'line_start': [],
+                'line_end': [],
+                'char_start': [],
+                'char_end': []
+            }
+
         for j, func in enumerate(i.function_list):
             # TODO: replace this junk with line based ops
-            start_idx = findnth(codestr, '\n', func.start_line-1)+1
-            end_idx = findnth(codestr, '\n', func.end_line-1)
+            rv['method']['line_start'].append(func.start_line-1)
+            rv['method']['line_end'].append(func.end_line - 1)
+            line = codestr_split[func.start_line-1]
+            rv['char_start'].append(len(line) - len(line.lstrip()))
+            line = codestr_split[func.end_line-1]
+            rv['char_end'].append(len(line) - len(line.lstrip()))
+
+        return rv
 
 
 class NewlineTokenizer(BaseTokenizer):
@@ -152,7 +182,17 @@ class NewlineTokenizer(BaseTokenizer):
 
     @staticmethod
     def tokenize(codestr, lang):
-        return np.array(splitWithIndices(codestr, '\n'))
+        codestr = codestr.split('\n')
+        rv = {}
+        for key in keys():
+            rv[key] = {
+                'line_start': [range(len(codestr))],
+                'line_end': [range(len(codestr))],
+                'char_start': [len(line) - len(line.lstrip()) for line in codestr],
+                'char_end': [len(line.rstrip()) for line in codestr]
+            }
+
+        return rv
 
 
 class ClassTokenizer(BaseTokenizer):

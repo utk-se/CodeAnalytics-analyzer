@@ -6,7 +6,7 @@ import pandas as pd
 from cadistributor import log
 from typing import Optional, Collection, Union
 from pandas.api.extensions import ExtensionDtype
-from .exceptions import UnsupportedLanguageException
+from .exceptions import UnsupportedLanguageException, MalformedDataFrameException
 from .util import get_file_extension
 from hashlib import md5
 from typing import List, Callable, Union, Tuple
@@ -17,7 +17,7 @@ Num = Union[int, float]
 
 class CodeRepo:
     # TODO: type annotate this
-    def __init__(self, input_path, tokenizers, metrics: List[Callable[[str], Num]], dataframe=None, languages=['.py', '.cpp', '.js', '.h', '.java'],
+    def __init__(self, input_path, dataframe=pd.DataFrame(), languages=['.py', '.cpp', '.js', '.h', '.java'],
                  debug=False):
 
         # self.debug = debug
@@ -31,14 +31,11 @@ class CodeRepo:
                     '{} is not a supported file extension. Supported file extensions include {}'.format(extension, self.supported_filetypes))
 
         self.file_paths = []
+        self.file_extensions = []
         self.num_directories = 0
         self.num_extensions = 0
         self.max_depth = 0
         self.num_files = 0
-
-        # TODO: verify language support from tokenizers
-        self.tokenizers = tokenizers
-        self.metrics = metrics
 
         if not os.path.exists(input_path):
             raise FileNotFoundError('{} does not exist'.format(input_path))
@@ -69,33 +66,19 @@ class CodeRepo:
                     continue
 
                 self.file_paths.append(file_path)
+                self.file_extensions.append(file_extension)
 
         self.num_extensions = len(list(file_extensions))
         self.df = dataframe
+        self.default_columns = ['line_start', 'line_end', 'char_start',
+                                'char_end']
 
         # get intersection of specified languages and existing languages
         self.languages = set(languages) & file_extensions
         log.info('languages found: {}'.format(self.languages))
         log.info('number of valid files found: {}'.format(len(self.file_paths)))
-        # if the dataframe is empty; set up initial columns and insert file data
+
         # TODO: robustness: check for malformed input dataframes
-
-        self.tokenizer_names = []
-        for tokenizer in self.tokenizers:
-            self.tokenizer_names.extend(tokenizer.keys())
-
-        self.metric_names = ['line_start', 'char_start',
-                             'line_end', 'char_end']
-        self.metric_names.extend(list(self.metrics.keys()))
-
-        log.info('Tokenizers: {}\n Metrics: {}'.format(
-            self.tokenizer_names, self.metric_names))
-        if self.df is None:
-            mi = pd.MultiIndex.from_product([self.languages, self.file_paths, self.tokenizer_names], names=[
-                'language', 'file_path', 'token_type'])
-            self.df = pd.DataFrame(index=mi, columns=self.metric_names)
-
-        print(self.df.head())
 
     '''
     Index the code repository into a dataframe for metric gathering
@@ -109,49 +92,55 @@ class CodeRepo:
     case matrix        no new columns new columns
     no new files       do nothing     add & populate columns, no new rows
     new/modified files add new rows   do above, then add new rows
+
+    Merge: 
     '''
 
-    def index(self):
+    def index(self, tokenizers, metrics: List[Callable[[str], Num]]):
+        # TODO: verify language support from tokenizers
+        self.tokenizers = tokenizers
+        self.metrics = metrics
 
-        # any existing files with missing token columns need to be updated
+        log.info('Indexing this repository...')
 
-        token_columns.extend(
-            ['line_start', 'char_start', 'line_end', 'char_end'])
+        self.tokenizer_names = []
+        for tokenizer in self.tokenizers:
+            self.tokenizer_names.extend(tokenizer.keys())
 
-        # get difference between existing columns and current columns
-        new_token_cols = token_columns - set(self.df.columns)
+        self.metric_names = list(self.metrics.keys())
 
-        # for each new column, calculate the values
-        # get all current files
-        # exception case: old files are not available: fill na
-        self.df.reindex(columns=columns)
+        # check for existing table entries
+        # self.new_columns = set(self.tokenizer_names + self.metric_names) - set(self.df.)
+        # self.new_files = []
 
-        # for any new files, process tokens
+        # determine non-preexisting metrics to save time if reindexing or
+        # provided dataframe at initialization
+        new_tokenizers = []
+        new_metrics = []
+        new_files = []
+        if not self.df.empty():
+            try:
+                new_tokenizers = set(self.tokenizer_names) - \
+                    set(self.df.index.get_level_values('token_type').unique())
+                new_metrics = set(self.metric_names) - set(self.df.columns)
+                new_files = set(
+                    self.file_paths) - set(self.df.index.get_level_values('file_path').unique())
+            except Exception as e:
+                raise MalformedDataFrameException(
+                    'Malformed dataframe received. {}'.format(e))
+        else:
+            new_tokenizers = self.tokenizer_names
+            new_metrics = self.metrics
+            new_files = self.file_paths
 
-        # construct rows with new files for indexing
+        data_dict = {}
 
-        # calculate metrics for all metrics with na values
-    '''
-    convienience functions / wrappers for common metrics,
-    querying dataframe, statistical methods
-    '''
+        mi = pd.MultiIndex.from_product([self.languages, self.file_paths, self.tokenizer_names], names=[
+            'language', 'file_path', 'token_type'])
+        self.df = self.df.reindex(
+            index=mi, columns=self.default_columns + self.metric_names)
 
-
-class CodeFile(CodeRepo):
-    def __init__(self, path):
-        # read in the file
-        pass
-
-
-class CodeBlock:
-    # np.array()
-    def __init__(self, parent):
-        # super().__init__()
-
-        pass
-
-        self.lang = None
-        self.type = None
+        # loop through df, iterate on files and populate na
 
 
 '''
