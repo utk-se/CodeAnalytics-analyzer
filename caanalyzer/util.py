@@ -1,6 +1,6 @@
 import os
 from itertools import groupby
-
+from Types import List
 # https://www.tutorialspoint.com/How-to-find-the-nth-occurrence-of-substring-in-a-string-in-Python
 
 
@@ -27,3 +27,18 @@ def get_file_extension(file_path):
     if len(file_extension) <= 1:
         file_extension = ''
     return file_extension
+
+
+def flatten_list(lst: List[List]) -> List:
+    [y for x in lst for y in x]
+
+
+def tokenizer_keys_to_instances(self, available_tokenizers, keys):
+    keys = set(keys)
+    rv = []
+    for tokenizer in available_tokenizers:
+        tks = set(tokenizer.keys())
+        if tks.issubset(keys):
+            keys -= tks
+            rv.append(tokenizer)
+    return rv

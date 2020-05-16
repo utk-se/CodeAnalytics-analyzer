@@ -7,7 +7,7 @@ from cadistributor import log
 from typing import Optional, Collection, Union
 from pandas.api.extensions import ExtensionDtype
 from .exceptions import UnsupportedLanguageException, MalformedDataFrameException
-from .util import get_file_extension
+from .util import get_file_extension, flatten_list
 from hashlib import md5
 from typing import List, Callable, Union, Tuple
 from pathlib import Path
@@ -93,7 +93,6 @@ class CodeRepo:
     no new files       do nothing     add & populate columns, no new rows
     new/modified files add new rows   do above, then add new rows
 
-    Merge: 
     '''
 
     def index(self, tokenizers, metrics: List[Callable[[str], Num]]):
@@ -105,7 +104,7 @@ class CodeRepo:
 
         self.tokenizer_names = []
         for tokenizer in self.tokenizers:
-            self.tokenizer_names.extend(tokenizer.keys())
+            self.tokenizer_names.append(tokenizer.keys())
 
         self.metric_names = list(self.metrics.keys())
 
@@ -118,22 +117,40 @@ class CodeRepo:
         new_tokenizers = []
         new_metrics = []
         new_files = []
+        existing_files = []
         if not self.df.empty():
             try:
-                new_tokenizers = set(self.tokenizer_names) - \
+                new_tokenizers = set(flatten_list(self.tokenizer_names)) - \
                     set(self.df.index.get_level_values('token_type').unique())
                 new_metrics = set(self.metric_names) - set(self.df.columns)
+                existing_files = set(
+                    self.df.index.get_level_values('file_path').unique())
                 new_files = set(
-                    self.file_paths) - set(self.df.index.get_level_values('file_path').unique())
+                    self.file_paths) - existing_files
             except Exception as e:
                 raise MalformedDataFrameException(
                     'Malformed dataframe received. {}'.format(e))
         else:
-            new_tokenizers = self.tokenizer_names
+            new_tokenizers = flatten_list(self.tokenizer_names)
             new_metrics = self.metrics
             new_files = self.file_paths
 
-        data_dict = {}
+        # iterate through existing files and calculate any new metrics
+        # if we have new tokenizers or new metrics we will have to revisit all files
+        if len(new_tokenizers) or len(new_metrics):
+            # if we have existing files, process these first with
+            # the updated metrics
+            for input_path in list(existing_files):
+                # check that the file exists
+                if not os.path.exists(input_path):
+                    log.warn('Previously indexed file {} not found. This may result in NaN values'.format(
+                        input_path))
+                    continue
+                with open(input_path) as fin:
+                    codestr = fin.read()
+
+                    # Apply any new code parsers
+                    for tkzr in tokenizer_key_to_instance()
 
         mi = pd.MultiIndex.from_product([self.languages, self.file_paths, self.tokenizer_names], names=[
             'language', 'file_path', 'token_type'])
