@@ -151,21 +151,21 @@ class MethodTokenizer(BaseTokenizer):
         codestr_split = codestr.split('\n')
         rv = {}
         for key in keys():
-            rv[key] = {
-                'line_start': [],
-                'line_end': [],
-                'char_start': [],
-                'char_end': []
-            }
+            # rv[key] = {
+            #     'line_start': [],
+            #     'line_end': [],
+            #     'char_start': [],
+            #     'char_end': []
+            # }
+            rv[key] = np.zeros((len(i.function_list), 4))
 
         for j, func in enumerate(i.function_list):
-            # TODO: replace this junk with line based ops
-            rv['method']['line_start'].append(func.start_line-1)
-            rv['method']['line_end'].append(func.end_line - 1)
+            rv['method'][j][0] = func.start_line-1
+            rv['method'][j][1] = func.end_line - 1
             line = codestr_split[func.start_line-1]
-            rv['char_start'].append(len(line) - len(line.lstrip()))
+            rv['method'][j][2] = len(line) - len(line.lstrip())
             line = codestr_split[func.end_line-1]
-            rv['char_end'].append(len(line) - len(line.lstrip()))
+            rv['method'][j][3] = len(line) - len(line.lstrip())
 
         return rv
 
@@ -185,12 +185,15 @@ class NewlineTokenizer(BaseTokenizer):
         codestr = codestr.split('\n')
         rv = {}
         for key in keys():
-            rv[key] = {
-                'line_start': [range(len(codestr))],
-                'line_end': [range(len(codestr))],
-                'char_start': [len(line) - len(line.lstrip()) for line in codestr],
-                'char_end': [len(line.rstrip()) for line in codestr]
-            }
+            # rv[key] = {
+            #     'line_start': [range(len(codestr))],
+            #     'line_end': [range(len(codestr))],
+            #     'char_start': [len(line) - len(line.lstrip()) for line in codestr],
+            #     'char_end': [len(line.rstrip()) for line in codestr]
+            # }
+            rv[key] = np.array([[range(len(codestr))], [range(len(codestr))], [
+                               len(line) - len(line.lstrip()) for line in codestr],
+                [len(line.rstrip()) for line in codestr]])
 
         return rv
 
