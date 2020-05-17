@@ -89,8 +89,6 @@ class Tokenizer(BaseTokenizer):
         rv = {}
         rv['token'] = []
 
-        bigline = ' '.join(lines)
-        # log.info(list(splitWithIndices(bigline)))
         for i, line in enumerate(lines):
             for token_start, token_end in splitWithIndices(line):
                 rv['token'].append([i, i+1, token_start, token_end])
