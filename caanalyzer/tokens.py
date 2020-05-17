@@ -74,6 +74,29 @@ return token indices for a file
 '''
 
 
+class Tokenizer(BaseTokenizer):
+
+    @staticmethod
+    def get_supported_filetypes():
+        return ['py', 'cpp', 'js', 'h', 'java']
+
+    @staticmethod
+    def keys():
+        return ['token']
+
+    @staticmethod
+    def tokenize(lines, **kwargs):
+        rv = {}
+        rv['token'] = []
+
+        bigline = ' '.join(lines)
+        # log.info(list(splitWithIndices(bigline)))
+        for i, line in enumerate(lines):
+            for token_start, token_end in splitWithIndices(line):
+                rv['token'].append([i, i+1, token_start, token_end])
+        return rv
+
+
 class FileTokenizer(BaseTokenizer):
 
     @staticmethod

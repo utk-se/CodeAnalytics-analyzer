@@ -128,7 +128,7 @@ class CodeRepo:
     '''
 
     def unprocessed_metrics(self):
-        if self.metrics is None:
+        if not self.metrics:
             return []
         elif not df.empty:
             return set(self.metric_names) - set(self.df.columns)
@@ -194,7 +194,7 @@ class CodeRepo:
     if you want to join info for multiple repos, index multiple repos and perform a pandas join
     '''
 
-    def index(self, tokenizers, metrics: List[Callable[[str], Num]]):
+    def index(self, tokenizers, metrics={}):
         if self.indexed:
             return
 
