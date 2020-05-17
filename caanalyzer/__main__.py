@@ -14,6 +14,7 @@ def analyze(path):
     repo = CodeRepo('.')
     repo.index([FileTokenizer, LineTokenizer, MethodTokenizer], {'len': len})
     # return output
+    # get average length of a file
 
 
 if __name__ == "__main__":

@@ -1,6 +1,7 @@
 import lizard
 import numpy as np
-from .util import findnth, splitWithIndices
+from .util import findnth, splitWithIndices, line_start, line_end
+from cadistributor import log
 
 '''
 Base tokenizer class. Implement one yourself.
@@ -49,7 +50,7 @@ class BaseTokenizer:
     '''
     @staticmethod
     # List[Callable[[str], List[Tuple[int, int, int, int]]]]
-    def tokenize(self, codestr):
+    def tokenize(self, lines):
         raise NotImplementedError('Use a subclass')
 
 
@@ -69,8 +70,8 @@ class MultiTokenizer(BaseTokenizer):
     def keys():
         raise NotImplementedError
 
-    def tokenize(self, codestr):
-        return super().tokenize(self, codestr)
+    def tokenize(self, lines):
+        return super().tokenize(self, lines)
 
 
 '''
@@ -89,23 +90,13 @@ class FileTokenizer(BaseTokenizer):
         return ['file']
 
     @staticmethod
-    def tokenize(self, codestr):
-        return np.array([0, len(codestr)-1])
+    def tokenize(lines, **kwargs):
+        rv = {}
+        # log.info('lines: {}'.format(lines))
+        rv['file'] = np.array(
+            [[0, len(lines), line_start(lines[0]), line_end(lines[-1])]], dtype=np.int)
 
-
-class LineTokenizer(BaseTokenizer):
-
-    @staticmethod
-    def get_supported_filetypes():
-        return ['py', 'cpp', 'js', 'h', 'java']
-
-    @staticmethod
-    def keys():
-        return ['newline']
-
-    @staticmethod
-    def tokenize(codestr, lang):
-        return np.array(splitWithIndices(codestr, '\n'))
+        return rv
 
 
 '''
@@ -146,31 +137,28 @@ class MethodTokenizer(BaseTokenizer):
     # https://stackoverflow.com/questions/68633/regex-that-will-match-a-java-method-declaration
 
     @staticmethod
-    def tokenize(codestr, lang):
-        i = lizard.analyze_file.analyze_source_code(lang, codestr)
-        codestr_split = codestr.split('\n')
+    def tokenize(lines, **kwargs):
+        # potentially refactor to return set of strings, use yield statement
+        # for reduced memory footprint
+        lang = kwargs['lang']
+        i = lizard.analyze_file.analyze_source_code(lang, '\n'.join(lines))
         rv = {}
-        for key in keys():
-            # rv[key] = {
-            #     'line_start': [],
-            #     'line_end': [],
-            #     'char_start': [],
-            #     'char_end': []
-            # }
-            rv[key] = np.zeros((len(i.function_list), 4))
+        # TODO: don't output as np array; output as tuple
+        for key in MethodTokenizer.keys():
+            rv[key] = np.zeros((len(i.function_list), 4), dtype=np.int)
 
         for j, func in enumerate(i.function_list):
             rv['method'][j][0] = func.start_line-1
             rv['method'][j][1] = func.end_line - 1
-            line = codestr_split[func.start_line-1]
-            rv['method'][j][2] = len(line) - len(line.lstrip())
-            line = codestr_split[func.end_line-1]
-            rv['method'][j][3] = len(line) - len(line.lstrip())
+            line = lines[func.start_line-1]
+            rv['method'][j][2] = line_start(line)
+            line = lines[func.end_line-1]
+            rv['method'][j][3] = line_end(line)+1
 
         return rv
 
 
-class NewlineTokenizer(BaseTokenizer):
+class LineTokenizer(BaseTokenizer):
 
     @staticmethod
     def get_supported_filetypes():
@@ -181,19 +169,18 @@ class NewlineTokenizer(BaseTokenizer):
         return ['newline']
 
     @staticmethod
-    def tokenize(codestr, lang):
-        codestr = codestr.split('\n')
+    def tokenize(lines, **kwargs):
         rv = {}
-        for key in keys():
+        for key in LineTokenizer.keys():
             # rv[key] = {
-            #     'line_start': [range(len(codestr))],
-            #     'line_end': [range(len(codestr))],
-            #     'char_start': [len(line) - len(line.lstrip()) for line in codestr],
-            #     'char_end': [len(line.rstrip()) for line in codestr]
+            #     'line_start': [range(len(lines))],
+            #     'line_end': [range(len(lines))],
+            #     'char_start': [len(line) - len(line.lstrip()) for line in lines],
+            #     'char_end': [len(line.rstrip()) for line in lines]
             # }
-            rv[key] = np.array([[range(len(codestr))], [range(len(codestr))], [
-                               len(line) - len(line.lstrip()) for line in codestr],
-                [len(line.rstrip()) for line in codestr]])
+            rv[key] = np.array([list(range(len(lines))), list(range(1, len(lines)+1)), [
+                line_start(line) for line in lines],
+                [line_end(line)+1 for line in lines]], dtype=np.int).T
 
         return rv
 
@@ -208,4 +195,4 @@ class ClassTokenizer(BaseTokenizer):
         return ['class']
 
     # @staticmethod
-    # def tokenize(self, codestr):
+    # def tokenize(self, lines):

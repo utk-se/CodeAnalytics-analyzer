@@ -11,12 +11,13 @@ from .util import get_file_extension, flatten_list, tokenizer_keys_to_instances
 from hashlib import md5
 from typing import List, Callable, Union, Tuple
 from pathlib import Path
+import json
 
 Num = Union[int, float]
 
 '''
 Container for code repository.
-TODO: consider minor refactor to become pandas extension
+TODO: refactor to become pandas extension
 https://pandas.pydata.org/pandas-docs/stable/development/extending.html
 ie, df.index_repo(), df.mean() versus repo.df.mean(), repo.index()
 '''
@@ -24,8 +25,9 @@ ie, df.index_repo(), df.mean() versus repo.df.mean(), repo.index()
 
 class CodeRepo:
     # TODO: type annotate this
-    def __init__(self, input_path, dataframe=pd.DataFrame(), languages=['.py', '.cpp', '.js', '.h', '.java']):
+    def __init__(self, input_path, languages=['.py', '.cpp', '.js', '.h', '.java']):
 
+        self.df = pd.DataFrame()
         self.supported_filetypes = set(
             ['.py', '.cpp', '.js', '.h', '.java']) & set(languages)
 
@@ -44,7 +46,6 @@ class CodeRepo:
         log.info('languages found: {}'.format(self.languages))
         log.info('number of valid files found: {}'.format(len(self.file_paths)))
 
-        self.indexed = False
         # TODO: robustness: check for malformed input dataframes
         self.tokenizers = None
         self.metrics = None
@@ -59,15 +60,14 @@ class CodeRepo:
     '''
 
     def register_path(self, input_path, append=True):
-        if not append:
-            self.file_paths = []
-            self.file_extensions = []
-            self.num_directories = 0
-            self.num_extensions = 0
-            self.max_depth = 0
-            self.num_files = 0
+        self.file_paths = []
+        self.file_extensions = []
+        self.num_directories = 0
+        self.num_extensions = 0
+        self.max_depth = 0
+        self.num_files = 0
 
-        self.root_path = input_path
+        self.root_path = str(Path(input_path).absolute())
 
         if not os.path.exists(input_path):
             raise FileNotFoundError('{} does not exist'.format(input_path))
@@ -95,15 +95,15 @@ class CodeRepo:
                 file_extension = file_path.suffix
                 file_extensions.add(file_extension)
 
-                if file_extension not in languages:
+                if file_extension not in self.supported_filetypes:
                     continue
 
-                self.file_paths.append(str(file_path))
+                self.file_paths.append(str(file_path.absolute()))
                 self.file_extensions.append(file_extension)
 
         self.num_extensions = len(list(file_extensions))
-        self.languages = set(self.languages) & file_extensions
-        # self.df = dataframe
+        self.languages = set(self.supported_filetypes) & file_extensions
+        self.indexed = False
 
     def unprocessed_tokens(self):
         if self.tokenizers is None:
@@ -139,7 +139,7 @@ class CodeRepo:
 
     '''
     Retrieve previously processed filenames.
-    if intersection=True, return only filenames that exist 
+    if intersection=True, return only filenames that exist
     within the scope of the current repository
     '''
 
@@ -176,16 +176,13 @@ class CodeRepo:
     any
     columns: filename, md5hash?, is_file, <is_tokentype>, <token_start>, <token_stop>
 
-    case matrix        no new columns new columns
-    no new files       do nothing     add & populate columns, no new rows
-    new/modified files add new rows   do above, then add new rows
-
-    Skip other files: If filepaths from outside the repo are found in the dataframe,
-    do not attempt to load them. Keep this 'True' if you don't intend 
-    to mix data from multiple repositories.
+    if you want to join info for multiple repos, index multiple repos and perform a pandas join
     '''
 
     def index(self, tokenizers, metrics: List[Callable[[str], Num]]):
+        if self.indexed:
+            return
+
         # TODO: verify language support from tokenizers
         self.tokenizers = tokenizers
         self.metrics = metrics
@@ -198,65 +195,46 @@ class CodeRepo:
 
         self.metric_names = list(self.metrics.keys())
 
-        # determine non-preexisting metrics to save time if reindexing or
-        # provided dataframe at initialization
+        # if we have existing files, process these first with
+        # the updated metrics
+        # refactor to 2d numpy array
+        df_dict = {}
 
-        new_tokenizers = self.unprocessed_tokens()
-        new_metrics = self.unprocessed_metrics()
-        new_files = self.unprocessed_files()
-        existing_files = self.processed_files()
-        existing_metrics = self.existing_metrics()
+        for input_path, lang in zip(list(self.file_paths), self.file_extensions):
 
-        # iterate through existing files and calculate any new metrics
-        # if we have new tokenizers or new metrics we will have to revisit all files
-        # New
-        if len(new_tokenizers) != 0:
+            # check that the file exists
+            if not os.path.exists(input_path):
+                log.warn('Previously indexed file {} not found.'.format(
+                    input_path))
+                continue
+            with open(input_path) as fin:
+                # log.info('Reading {}'.format(input_path))
+                codestr_lines = fin.read().split('\n')
 
-            # if we have existing files, process these first with
-            # the updated metrics
-            for input_path, lang in zip(list(existing_files), [get_file_extension(fp) for fp in existing_files]):
+                # Apply any new code parsers, don't calc new metrics yet
+                for tkzr in self.tokenizers:
+                    out = tkzr.tokenize(codestr_lines, lang=lang)
+                    # log.info('Applying tokenizer(s): {}'.format(tkzr.keys()))
+                    for k, v in out.items():
 
-                # check that the file exists
-                if not os.path.exists(input_path):
-                    log.warn('Previously indexed file {} not found. This may result in NaN values'.format(
-                        input_path))
-                    continue
-                with open(input_path) as fin:
-                    codestr = fin.read()
-                    codestr_lines = codestr.split('\n')
-                    df_dict = {}
+                        # apply existing metrics to the new rows
+                        for i, row in enumerate(v):
+                            line_start, line_end, char_start, char_end = tuple(
+                                row)
+                            substr = '\n'.join(codestr_lines[line_start:line_end])[
+                                char_start:char_end]
+                            mv = [mm(substr)
+                                  for mm in self.metrics.values()]
 
-                    # Apply any new code parsers, don't calc new metrics yet
-                    for tkzr in tokenizer_keys_to_instances(self.tokenizers, new_tokenizers):
-                        out = tkzr.tokenize(codestr, lang)
-                        for k, v in out.items():
-                            mv = []
+                            combined_row = np.concatenate(
+                                (row, np.array(mv)))
+                            df_dict[(lang, input_path, k, i)] = combined_row
 
-                            # apply existing metrics to the new rows
-                            for row in v:
-                                line_start, line_end, char_start, char_end = tuple(
-                                    row)
-                                substr = '\n'.join(codestr_lines[line_start:line_end])[
-                                    char_start:char_end]
-                                mv.append([self.metrics[mm](substr)
-                                           for mm in new_metrics])
-
-                            # TODO: ensure that columns for metrics are passed the correct values
-                            df_dict[(lang, input_path, k)] = np.concatenate(
-                                (v, np.array(mv)), axis=1)
-
-        # process new metrics for all files
-        if len(new_metrics != 0):
-            pass
-
-        # process new files (metrics and tokenizers)
-
-        mi = pd.MultiIndex.from_product([self.languages, self.file_paths, flatten_list(self.tokenizer_names)], names=[
-            'language', 'file_path', 'token_type'])
-        self.df = self.df.reindex(
-            index=mi, columns=self.default_columns + self.metric_names)
-
-        self.indexed = True
+        mi = pd.MultiIndex.from_tuples(
+            df_dict.keys(), names=['lang', 'file_path', 'token_type', 'id'])
+        self.df = pd.DataFrame(
+            df_dict, columns=mi, index=self.default_columns + self.metric_names)
+        # log.info(self.df.head())
         log.info('Repository {} indexed for analysis'.format(self.root_path))
 
 

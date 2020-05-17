@@ -13,6 +13,14 @@ def findnth(string, substring, n):
 # https://stackoverflow.com/questions/13734451/string-split-with-indices-in-python
 
 
+def line_start(line):
+    return len(line) - len(line.lstrip())
+
+
+def line_end(line):
+    return len(line.rstrip())
+
+
 def splitWithIndices(s, c=' '):
     p = 0
     for k, g in groupby(s, lambda x: x == c):
