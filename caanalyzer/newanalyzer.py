@@ -12,6 +12,12 @@ from hashlib import md5
 from typing import List, Callable, Union, Tuple
 from pathlib import Path
 import json
+import codecs
+from tqdm import tqdm
+from .util import TqdmToLogger
+import logging
+tqdm_out = TqdmToLogger(log, level=logging.INFO)
+
 
 Num = Union[int, float]
 
@@ -71,6 +77,9 @@ class CodeRepo:
 
         if not os.path.exists(input_path):
             raise FileNotFoundError('{} does not exist'.format(input_path))
+        if not os.path.isdir(input_path):
+            raise NotADirectoryError(
+                'Provided path {} is not a directory'.format(input_path))
 
         # retrieve filenames and get directory metrics
         depth = 0
@@ -161,6 +170,12 @@ class CodeRepo:
         else:
             return list(self.df.columns)
 
+    def add_tokenizers(self, tokenizers):
+        raise NotImplementedError
+
+    def add_metrics(self, metrics):
+        raise NotImplementedError
+
     '''
     return true if a repository has been indexed
     '''
@@ -200,14 +215,15 @@ class CodeRepo:
         # refactor to 2d numpy array
         df_dict = {}
 
-        for input_path, lang in zip(list(self.file_paths), self.file_extensions):
+        for input_path, lang in tqdm(zip(list(self.file_paths), self.file_extensions), total=len(self.file_paths)):
 
             # check that the file exists
             if not os.path.exists(input_path):
                 log.warn('Previously indexed file {} not found.'.format(
                     input_path))
                 continue
-            with open(input_path) as fin:
+
+            with codecs.open(input_path, 'r', encoding='utf-8', errors='ignore') as fin:
                 # log.info('Reading {}'.format(input_path))
                 codestr_lines = fin.read().split('\n')
 
@@ -225,7 +241,6 @@ class CodeRepo:
                             substr = codestr_lines[line_start: line_end]
                             substr[0] = substr[0][char_start:]
                             substr[-1] = substr[-1][:char_end]
-                            substr = '\n'.join(substr)
 
                             mv = [mm(substr)
                                   for mm in self.metrics.values()]
@@ -234,9 +249,11 @@ class CodeRepo:
                                 (row, np.array(mv)))
                             df_dict[(lang, input_path, k, i)] = combined_row
 
+        log.info('Creating dataframe...')
+
         mi = pd.MultiIndex.from_tuples(
             df_dict.keys(), names=['lang', 'file_path', 'token_type', 'id'])
         self.df = pd.DataFrame(
-            df_dict, columns=mi, index=self.default_columns + self.metric_names)
+            df_dict, columns=mi, index=self.default_columns + self.metric_names).T
         # log.info(self.df.head())
         log.info('Repository {} indexed for analysis'.format(self.root_path))

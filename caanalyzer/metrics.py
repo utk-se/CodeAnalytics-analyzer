@@ -17,9 +17,19 @@ TODO: num newlines
 TODO: md5hash
 '''
 
+# TODO: width, height could be calculated from already existing columns
+
 
 def width(s):
-    return s.count('\n')
+    return max([len(sl) for sl in s])
+
+
+def height(s):
+    return len(s)
+
+
+def num_tokens(s):
+    return sum([len(line.split()) for line in s])
 
 
 class BaseMetric:

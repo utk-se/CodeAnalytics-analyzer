@@ -1,8 +1,36 @@
 import os
 from itertools import groupby
 from typing import List
-# https://www.tutorialspoint.com/How-to-find-the-nth-occurrence-of-substring-in-a-string-in-Python
+import logging
+import time
+from tqdm import tqdm
+import io
 
+# https://stackoverflow.com/questions/14897756/python-progress-bar-through-logging-module
+
+
+class TqdmToLogger(io.StringIO):
+    """
+        Output stream for TQDM which will output to logger module instead of
+        the StdOut.
+    """
+    logger = None
+    level = None
+    buf = ''
+
+    def __init__(self, logger, level=None):
+        super(TqdmToLogger, self).__init__()
+        self.logger = logger
+        self.level = level or logging.INFO
+
+    def write(self, buf):
+        self.buf = buf.strip('\r\n\t ')
+
+    def flush(self):
+        self.logger.log(self.level, self.buf)
+
+
+# https://www.tutorialspoint.com/How-to-find-the-nth-occurrence-of-substring-in-a-string-in-Python
 
 def findnth(string, substring, n):
     parts = string.split(substring, n + 1)
