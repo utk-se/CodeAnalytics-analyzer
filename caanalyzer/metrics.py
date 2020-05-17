@@ -18,6 +18,10 @@ TODO: md5hash
 '''
 
 
+def width(s):
+    return s.count('\n')
+
+
 class BaseMetric:
     pass
 

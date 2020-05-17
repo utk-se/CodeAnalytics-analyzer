@@ -26,11 +26,6 @@ TODO: make lines newline separated by default
 
 TODO: AST can process many tokens at once: MultiTokenizer
 TODO: Tokenizer merging
-
-dict output
-{
-    'tokenizer/column keys 1' : [linestart, linestop, charstart, charend]
-}
 '''
 
 
@@ -71,7 +66,7 @@ class MultiTokenizer(BaseTokenizer):
         raise NotImplementedError
 
     def tokenize(self, lines):
-        return super().tokenize(self, lines)
+        raise NotImplementedError
 
 
 '''
@@ -149,7 +144,7 @@ class MethodTokenizer(BaseTokenizer):
 
         for j, func in enumerate(i.function_list):
             rv['method'][j][0] = func.start_line-1
-            rv['method'][j][1] = func.end_line - 1
+            rv['method'][j][1] = func.end_line
             line = lines[func.start_line-1]
             rv['method'][j][2] = line_start(line)
             line = lines[func.end_line-1]

@@ -221,8 +221,12 @@ class CodeRepo:
                         for i, row in enumerate(v):
                             line_start, line_end, char_start, char_end = tuple(
                                 row)
-                            substr = '\n'.join(codestr_lines[line_start:line_end])[
-                                char_start:char_end]
+
+                            substr = codestr_lines[line_start: line_end]
+                            substr[0] = substr[0][char_start:]
+                            substr[-1] = substr[-1][:char_end]
+                            substr = '\n'.join(substr)
+
                             mv = [mm(substr)
                                   for mm in self.metrics.values()]
 
@@ -236,33 +240,3 @@ class CodeRepo:
             df_dict, columns=mi, index=self.default_columns + self.metric_names)
         # log.info(self.df.head())
         log.info('Repository {} indexed for analysis'.format(self.root_path))
-
-
-'''
-
-if __name__ == '__main__':
-    repo = CodeRepo('path')
-    t = CustomType
-    # Custom codeblock types: should iterate over File and return set of start & end indices
-    # CommentBlock
-    # optionally add a list
-    repo.track(types=['method', 'class', 'token'])
-    # examples
-    # get method ids
-    # get total line of code
-    repo.count()
-    repo.split()
-    # get total line of python code
-    len(repo.where(type='method', lang='py').count('\n'))
-    # get total line of python code inside classes
-    # number of methods
-    # splitby
-    repo.where(types='method').count()
-    # number of files
-
-    # ben's map
-    arr_import = repo.where(types=# implement
-'''
-# average width of java function
-# repo.where(type='function', lang='java').groupby(
-#     'line').average(metric='length')
