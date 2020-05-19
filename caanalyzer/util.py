@@ -78,3 +78,28 @@ def tokenizer_keys_to_instances(available_tokenizers, keys):
             keys -= tks
             rv.append(tokenizer)
     return rv
+
+
+'''
+return the mode of a list
+'''
+
+
+def mode(lst):
+    l_dict = {}
+    # count frequencies
+    for n in lst:
+        if n in l_dict:
+            l_dict[n] += 1
+        else:
+            l_dict[n] = 1
+
+    # get item with highest frequency
+    max_f = 0
+    rv = 0
+    for k, v in l_dict.items():
+        if v > max_f:
+            max_f = v
+            rv = k
+
+    return rv

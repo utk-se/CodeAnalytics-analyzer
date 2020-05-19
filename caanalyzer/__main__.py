@@ -2,7 +2,7 @@
 from bson.json_util import loads, dumps
 from cadistributor import log
 # from analyzer import Analyzer
-from .newanalyzer import CodeRepo
+from .analyzer import CodeRepo
 from .tokens import MethodTokenizer, FileTokenizer, LineTokenizer
 # from .metrics import Length
 
