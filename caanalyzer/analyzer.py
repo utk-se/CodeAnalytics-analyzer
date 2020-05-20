@@ -1,116 +1,81 @@
+"""CodeAnalytics Analyzer
+
+A set of tools to gather metrics about code repositories, files, or 
+individual lines that can be used to compare code projects. Given a 
+repository, file, or line, produces a static analysis of the visual 
+structure of the code within, such as use of whitespace, line length, 
+and distribution of code elements, such as tokens, methods, and classes.
+
+Notes
+--------------------------------------------------------------------------
+    Initialize an instance of Repo or File with a filepath, or one of Line
+    with a string, to gather analytics on that source.
+    
+    Supply an ignorefile to exclude files and directories from analysis.
+
+    Retrieve results as a serializable dictionary by calling the export()
+    method.
+"""
+
 import os
 import lizard
 import json
 import re
 from cadistributor import log
 
+SUPPORTED_FILETYPES = ["cpp", "h", "java", "js", "py"]
+"""Extensions of supported filetypes (list of str)."""
 
-class Analyzer:
-    '''
-    Provided a repository, uses static code analysis to output data about
-    the shape of code. ie, it outputs information regarding the use of
-    whitespace, and the placement of code elements within a file.
+class Repo:
+    """Generates analytics for a code repository.
 
-    ignorefile: path to file containing rules for files to exclude from analysis.
-    Think of  a gitignore. # TODO: implement
-    expand_tabs: This argument expects an int, representing the number of spaces
-    to represent tabs as.
-    Debug: This flag enables debug statements to be printed. # TODO: Use logger
-    '''
-    class Repo:
-        def __init__(self):
-            self.repo = {
-                "file_objs": [],
-                "num_lines": 0,
-                "num_files": 0,
-            }
+    Parameters
+    ----------------------------------------------------------------------
+    input_path : str
+        Path to repository to analyse.
+    ignorefile : str, optional
+        Path to file specifying rules for excluding files from analysis.
+        (None by default.) #TODO: Implement ignorefile.
+    debug : bool, optional
+        Enable debug messages. (False by deault.)
+    tabsize : int, optional
+        The number of spaces with which to represent a tab character. (4
+        by default.)
+    
+    Attributes
+    ----------------------------------------------------------------------
+    file_objs : list of dict
+        List of dictionaries containing analytics for each file within
+        the repo.
+    file_exts : set of str
+        A set of each file extension appearing within the repo.
+    num_dirs : int
+        Total number of directories within the repo, excluding the 
+        top-level directory.
+    num_files : int
+        Total number of files within the repo.
+    num_lines : int
+        Total number of lines of code within the repo.
+    max_depth : int
+        Maximum directory depth of the repo. (The top level is depth 0.)
+    """
 
-    class File:
-        def __init__(self, file_extension, file_path):
-            self.file = {
-                "num_lines": 0,
-                "file_extension": file_extension,
-                "file_name": file_path,
-                "methods": [],  # Pair/Tuples with start and end lines of methods/classes
-                "classes": [],
-                "line_objs": [],
-                "nloc": None,
-                "token_count": 0
-            }
-
-    class Line:
-        def __init__(self, line_num):
-            self.line = {
-                "index": line_num,
-                "start_index": None,  # int specifying where line starts
-                "num_tabs": 0,  # boolean for existence
-                "end_index": None,  # int specifying where line ends
-                "num_spaces": 0,
-                "len": 0
-            }
-
-    def __init__(self, ignorefile=None, expand_tabs=4, output_raw=True,
-                 debug=False):
-        """
-        output_raw:
-            Enabling this flag will add information about each line to the output json. This may significantly increase RAM usage and output size.
-        """
-
+    def __init__(self, input_path, ignorefile=None, debug=False,
+                 tabsize=4):
+        self.input_path = input_path
         self.ignorefile = ignorefile
-        self.expand_tabs = expand_tabs
-        self.output_raw = output_raw
-        self.debug = debug
-        self.supported_filetypes = ['py', 'cpp', 'js', 'h', 'java']
+        self.debug      = debug
+        self.tabsize    = tabsize
 
-        self.repo_obj = None
+        self.file_objs = []
+        self.file_exts  = set()
+        self.num_dirs   = 0
+        self.num_files  = 0
+        self.num_lines  = 0
+        self.max_depth  = 0
 
-        log.debug("Analyzer instance created.")
-
-    '''
-    returns the serializable dictionary that can be outputted as a json file
-    Required argument: input_path - The path to a repo containing code.
-    Optional arguments: output_path, the name/path to the output json file.
-    '''
-
-    def class_finder(self, file_object):
-        for line_num, line in enumerate(file_object):
-            pattern = re.compile("^\#.*class.*\:")
-            if line.contains(pattern):
-                num_white = line.count(' ')
-                for line2 in file_object[line_num:]:
-                    # check num whitespace before non commented line
-                    pass
-
-    def export(self, output_path=None, indent=0):
-
-        # get rid of raw line info
-        if not self.output_raw:
-            pass
-        if output_path is not None:
-            # Write the repo object to json
-            with open(output_path, 'w') as outfile:
-                json.dump(repo_obj, outfile, indent=indent)
-
-        return self.repo_obj
-
-    '''
-    merges or interpolates neighbors in a given line collection to k groups
-    TODO: file, method, and class objs refactor to 'line collections' that have the same fields
-    will be useful for aggregation stage
-    '''
-
-    def analyze(self, input_path):
-
-        self.repo_obj = {
-            "file_objs": [],
-            "num_lines": 0,
-            "num_files": 0,
-            "avg_file_length": 0,
-            "max_file_length": 0,
-            "num_methods": 0,
-            "num_tokens": 0,
-            "line_freqs": []
-        }
+        if debug:
+            log.debug("Repo instance created.")
 
         '''
         TODO: instead of storing info about each line, we can store
@@ -125,105 +90,389 @@ class Analyzer:
         For line-level info - store frequency (ie, freq_newlines @ lineno x)
         '''
 
-        # Walk through all files
-        # go through every file within a given directory
-        for subdir, dirs, files in os.walk(input_path):
-            # Exclude hidden files/directories
-            # (see https://stackoverflow.com/questions/13454164/os-walk-without-hidden-folders)
-            files = [f for f in files if not f[0] == '.']
-            dirs[:] = [d for d in dirs if not d[0] == '.']
+        # ----------------------------------------------------------------
+        # Ignorefile
+        # ----------------------------------------------------------------
+        # Escaped os separator and path for use in ignorefile regex
+        esc_sep = "/" if os.sep == "/" else r"\\"
+        esc_path = re.sub(r"\\", r"\\\\", input_path)
 
-            for filep in files:
+        # The following dictionary translates ignorefile expressions
+        # into standard regular expressions for filtering files and dirs
+        ignorefile_trans = {
+            r"([^\\]|^)#.*" : "",
+            r"^!.*" : "",
+            r"/" : esc_sep,
+            r"\\#" : "#",
+            r"\\!" : "!",
+            r"\." : r"\.",
+            r"\?" : "[^/]{1}",
+            r"\*" : "[^/]*"
+        }
+        reg = re.compile(r'(%s)' % "|".join(ignorefile_trans.keys()))
 
-                file_path = subdir + os.sep + filep
-                file_extension = file_path.split('.')[-1]
+        if ignorefile:
+            with open(ignorefile, "r") as f:
+                lines = [l for l in (line.strip() for line in f) if l]
+        else:
+            lines = []
 
-                # For each file check file type
-                if file_extension not in self.supported_filetypes:
+        # Negated patterns (don't ignore files/dirs specified by these).
+        # TODO: Improve performance, and finish making it match gitignore
+        #  syntax. (Currently, leading '/' does nothing.)
+        neg_dirs  = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], line.lstrip()[1:]) for line in lines
+                            if re.fullmatch(r"!.*/.*", line))]
+        
+        neg_files = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], line.lstrip()[1:]) for line in lines
+                            if re.fullmatch(r"!.*[^/]", line))]
+
+        # Ignored patterns (ignore files/dirs specified by these).
+        # NOTE: Patterns with a / at the end match only directories
+        ig_dirs  = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], re.sub(r"/$", "", line))
+                        for line in lines) if l]
+
+        ig_files = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], line.strip()) for line in lines
+                            if re.fullmatch(r".*[^/]", line))
+                            if l]
+
+        # Walk through each file, directory by directory.
+        for root, dirs, files in os.walk(input_path):
+            # Exclude files and directories specified in ignorefile
+            files   = [f for f in files if any(re.fullmatch(p, f) != None
+                                for p in neg_files)
+                            or any(re.fullmatch(esc_path + esc_sep + p,
+                                        root + os.sep + f) != None
+                                for p in neg_files)
+                            or all(re.fullmatch(p, f) == None
+                                for p in ig_files)
+                            or all(re.fullmatch(esc_path + esc_sep + p,
+                                        root + os.sep + f) == None
+                                for p in ig_files)]
+            dirs[:] = [d for d in dirs if any(re.fullmatch(p, d) != None
+                                for p in neg_dirs)
+                            or any (re.fullmatch(esc_path + esc_sep + p,
+                                        root + os.sep + d) != None
+                                for p in neg_files)
+                            or all(re.fullmatch(p, d) == None
+                                for p in ig_dirs)
+                            or all(re.fullmatch(esc_path + esc_sep + p,
+                                        root + os.sep + d) == None
+                                for p in ig_dirs)]
+
+            # Update running max depth
+            self.max_depth = max(self.max_depth, root.count(os.sep))
+
+            # Tally directories
+            self.num_dirs += len(dirs)
+
+            for f in files:
+                file_path = os.path.join(root, f)
+                file_ext  = file_path.split('.')[-1]
+
+                # Ignore unsupported filetypes.
+                if file_ext not in SUPPORTED_FILETYPES:
                     continue
 
-                self.repo_obj["num_files"] += 1
-                file_obj = {
-                    "num_lines": 0,
-                    "file_extension": file_extension,
-                    "file_name": file_path,
-                    "methods": [],  # Pair/Tuples with start and end lines of methods/classes
-                    "classes": [],
-                    "line_objs": [],
-                    "nloc": None,
-                    "token_count": 0
-                }
+                # Register file extension in the set of observed exts.
+                self.file_exts.add(file_ext)
+                self.num_files += 1
 
                 try:
-                    i = lizard.analyze_file(file_path)
-                except RecursionError:
-                    log.err("Error with lizard analysis")
+                    file_obj = File(file_path, file_ext, tabsize)
+                except (RecursionError, IOError) as e:
+                    if debug:
+                        log.debug("Proceeding to next file.")
                     continue
 
-                file_obj["token_count"] = i.token_count
+                # Add file analytics to repo analytics
+                self.num_lines += file_obj.num_lines
+                self.file_objs.append(file_obj.export())
 
-                try:
-                    # Go thru each line in the file
-                    with open(file_path) as file:
-                        for line_num, line in enumerate(file):
-                            file_obj["num_lines"] += 1
-                            # Don't bother with lines that are just a newline
+        # ----------------------------------------------------------------
+        # Overall Repo Analytics
+        # ----------------------------------------------------------------
+        # Adjust max depth, where the top level of the repo is depth 0
+        self.max_depth -= input_path.count(os.sep)
 
-                            line_obj = {
-                                "index": line_num,
-                                "start_index": None,  # int specifying where line starts
-                                "num_tabs": 0,  # boolean for existence
-                                "end_index": None,  # int specifying where line ends
-                                "num_spaces": 0,
-                                "len": 0
-                            }
 
-                            # detect tabs & spaces
-                            line_obj["num_tabs"] = line.count('\t')
-                            line_obj["num_spaces"] = line.count(' ')
-                            line_obj["len"] = len(line)
-                            line = line.expandtabs(self.expand_tabs)
+    # ====================================================================
+    # The name of the final version of this method (unless it gets
+    # incorporated elsewhere or thrown out) should be a verb. - Zack
+    def class_finder(self, file_object):
+        """TODO: Short documentation goes here.
+        
+        Extended documentation goes here.
 
-                            # detect start & end index
-                            line_obj["start_index"] = len(
-                                line) - len(line.lstrip())
-                            line_obj["end_index"] = len(line.rstrip())
-                            # TODO: detecting imports
+        Parameters
+        ------------------------------------------------------------------
+        file_object : type
+            Lorem ipsum dolor sit amet.
 
-                            # Add line obj to file obj
-                            file_obj["line_objs"].append(line_obj)
+        Returns
+        ------------------------------------------------------------------
+        type
+            Lorem ipsum dolor sit amet.
+        """
+        for line_num, line in enumerate(file_object):
+            pattern = re.compile("^\#.*class.*\:")
+            if line.contains(pattern):
+                num_white = line.count(' ')
+                for line2 in file_object[line_num:]:
+                    # check num whitespace before non commented line
+                    pass
+    # ====================================================================
 
-                except Exception as e:
-                    # TODO: add logger & note error
-                    log.err("Unexpected error: " + str(e))
-                    continue
+    def export(self, output_path=None):
+        """Output chosen analytics for the repo.
 
-                # Append info about methods
-                for func_dict in i.function_list:
-                    method_obj = {
-                        "start_line": func_dict.__dict__["start_line"],
-                        "end_line": func_dict.__dict__["end_line"],
-                        "token_count": func_dict.__dict__["token_count"],
-                        "line_objs": []
-                    }
-                    method_obj['line_objs'] = [l for l in file_obj['line_objs']
-                                               [method_obj['start_line']:method_obj['end_line']]]
-                    file_obj["methods"].append(method_obj)
+        TODO: Implement options to exclude certain analytics. (Hence, 
+        "chosen analytics".)
 
-                # Add file obj to repo obj
-                self.repo_obj["file_objs"].append(file_obj)
+        Parameters
+        ------------------------------------------------------------------
+        output_path : str, optional
+            Path at which to output analytics json. (None by default. In
+            this case, it still returns a dictionary but does not write to
+            a file.)
 
-                # Max file length
-                if self.repo_obj["max_file_length"] < file_obj["num_lines"]:
-                    self.repo_obj["max_file_length"] = file_obj["num_lines"]
+        Returns
+        ------------------------------------------------------------------
+        dict
+            Serializable dictionary of chosen analytics.
+        """
+        if self.num_files > 0:
+            avg_file_length = self.num_lines / self.num_files
 
-        # Sum linecount
-        for obj in self.repo_obj["file_objs"]:
-            self.repo_obj["num_lines"] += obj["num_lines"]
+        repo_obj = {
+            "file_objs" : self.file_objs,
+            "file_exts" : self.file_exts,
+            "num_dirs"  : self.num_dirs,
+            "num_files" : self.num_files,
+            "num_lines" : self.num_lines,
+            "max_depth" : self.max_depth,
+            "avg_file_length" : avg_file_length
+        }
 
-        # get average lines per file
-        if self.repo_obj["num_files"] > 0:
-            self.repo_obj["avg_file_length"] = self.repo_obj["num_lines"] / \
-                self.repo_obj["num_files"]
+        if output_path:
+            try:
+                with open(output_path, 'w') as out:
+                    json.dump(repo_obj, out, 0)
 
-        return self.repo_obj
+            except IOError: 
+                log.err("Could not write to file: " + output_path)
+
+        return repo_obj
+
+class File:
+    """Stores analytics for a file.
+
+    Parameters
+    ----------------------------------------------------------------------
+    file_path : str
+        The path to the file.
+    file_ext : str
+        The file extension.
+
+    Attributes
+    ----------------------------------------------------------------------
+    file_path : str
+        The path to the file.
+    file_ext : str
+        The file extension.
+    line_objs : list of dict
+        List of dictionaries containing analytics for each line of code
+        within the file.
+    num_lines : int
+        Total number of lines of code within the file.
+    methods : list of pair
+        List of pairs containing the indices of the first and last lines
+        of methods within the file.
+    classes : list of pair
+        List of pairs containing the indices of the first and last lines
+        of classes within the file.
+    num_tokens : int
+        Total number of code tokens within the file.
+    """
+
+    def __init__(self, file_path, file_ext, tabsize=4):
+        self.file_path = file_path
+        self.file_ext  = file_ext
+        self.line_objs = []
+        self.num_lines = 0
+        self.methods   = []
+        self.classes   = []
+
+        try:
+            analysis = lizard.analyze_file(file_path)
+
+        except RecursionError:
+            # Log the error, then raise it for the caller. This 
+            # allows File to be used alone or as part of Repo.
+            log.err("Error with lizard analysis.")
+            raise RecursionError
+
+        # --------------------------------------------------------
+        # Tokens
+        # --------------------------------------------------------
+        self.num_tokens = analysis.token_count
+
+        # --------------------------------------------------------
+        # Lines
+        # --------------------------------------------------------
+        try:
+            # Analyze each line in the file
+            with open(file_path) as file:
+                for index, line in enumerate(file):
+                    self.num_lines += 1
+
+                    line_obj = Line(index, line, tabsize)
+                    self.lines.append(line_obj.export())
+            
+        except IOError:
+            log.err("Could not read file: " + file_path)
+            raise IOError
+
+        # --------------------------------------------------------
+        # Methods
+        # --------------------------------------------------------
+        for func in analysis.function_list:
+            method = (func.__dict__["start_line"],
+                        func.__dict__["end_line"])
+            
+            self.methods.append(method)
+
+        # --------------------------------------------------------
+        # TODO: Classes
+        # --------------------------------------------------------
+
+    def export(self, output_path=None):
+        """Output chosen analytics for the file.
+
+        TODO: Implement options to exclude certain analytics. (Hence, 
+        "chosen analytics".)
+
+        Parameters
+        ------------------------------------------------------------------
+        output_path : str, optional
+            Path at which to output analytics json. (None by default. In
+            this case, it still returns a dictionary but does not write to
+            a file.)
+        
+        Returns
+        ------------------------------------------------------------------
+        dict
+            Serializable dictionary of chosen analytics.
+        """
+        file_obj = {
+            "file_path": self.file_path,
+            "file_ext": self.file_ext,
+            "line_objs": self.line_objs,
+            "num_lines": self.num_lines,
+            "methods": self.methods,
+            "classes": self.classes,
+            "num_tokens": self.num_tokens
+        }
+
+        if output_path:
+            try:
+                with open(output_path, 'w') as out:
+                    json.dump(file_obj, out, 0)
+
+            except IOError: 
+                log.err("Could not write to file: " + output_path)
+
+        return file_obj
+
+class Line:
+    """Stores analytics for a line.
+    
+    Parameters
+    ----------------------------------------------------------------------
+    index : int
+        The index of the line within the file.
+    line  : str
+        The contents of the line
+    tabsize : int, optional
+        The number of spaces with which to represent a tab character. (4
+        by default.)
+
+    Attributes
+    ----------------------------------------------------------------------
+    index : int
+        The index of the line within the file.
+    start : int
+        The index of the first non-whitespace character within the line.
+    end : int
+        The index of the last non-whitespace character within the line.
+    length : int
+        The number of characters in the line (with tabs expanded).
+    num_tabs : int
+        The number of tab characters in the line.
+    num_spaces : int
+        The number of space characters in the line.
+    """
+
+    def __init__(self, index, line, tabsize=4):
+        self.index = index
+
+        self.num_tabs   = line.count('\t')
+        self.num_spaces = line.count(' ')
+
+        line = line.expandtabs(tabsize)
+
+        self.length = len(line)
+        self.start  = self.length - len(line.lstrip())
+        self.end    = len(line.rstrip()) - 1
+
+    def export(self, output_path=None):
+        """Output chosen analytics for the line.
+        
+        TODO: Implement options to exclude certain analytics. (Hence, 
+        "chosen analytics".)
+
+        Parameters
+        ------------------------------------------------------------------
+        output_path : str, optional
+            Path at which to output analytics json. (None by default. In
+            this case, it still returns a dictionary but does not write to
+            a file.)
+
+        Returns
+        ------------------------------------------------------------------
+        dict
+            Serializable dictionary of chosen analytics.
+        """
+        line_obj = {
+            "index": self.index,
+            "start": self.start,
+            "end": self.end,
+            "length": self.length,
+            "num_tabs": self.num_tabs,
+            "num_spaces": self.num_spaces
+        }
+
+        if output_path:
+            try:
+                with open(output_path, 'w') as out:
+                    json.dump(line_obj, out, 0)
+
+            except IOError: 
+                log.err("Could not write to file: " + output_path)
+
+        return line_obj
