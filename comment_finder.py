@@ -72,7 +72,7 @@ def find_comments(path, lang, verbose=0):
             if verbose:
                 print("DONE HASH")
         ####################################################################################################
-        elif lang == 'c' or lang == 'java' or lang == 'js':
+        elif lang == 'c' or lang == 'java' or lang == 'js' or lang == 'c++':
             single_line = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/")
             one_line_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}.*[*]{1}\/")
             begin_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]{1}")

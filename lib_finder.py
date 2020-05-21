@@ -6,7 +6,7 @@ def find_libs(path, lang):
             for x, line in enumerate(content):
                 if line.startswith("from") or line.startswith("import") or " import " in line:
                     lines.append(x)
-        elif lang == 'c':
+        elif lang == 'c' or lang == 'c++':
             for x, line in enumerate(content):
                 if line.startswith("#include"):
                     lines.append(x)

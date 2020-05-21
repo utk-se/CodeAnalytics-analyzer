@@ -36,7 +36,7 @@ def find_classes(path, lang, verbose=0):
                         if verbose:
                             print('found end of class at eof line #', line_no_end + 2)
                         class_tuples.append(tuple([line_no_start, line_no_end + 1]))
-        elif lang == 'java' or lang == 'c' or lang == 'js':
+        elif lang == 'java' or lang == 'c' or lang == 'js' or lang == 'c++':
             if lang == 'java':
                 pattern = re.compile("\s*public class\s\w*\s*{?\n")
                 pattern2 = re.compile("\s*public class\s\w*\n")
