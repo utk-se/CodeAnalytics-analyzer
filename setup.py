@@ -1,13 +1,22 @@
 from setuptools import setup, find_packages
 
-from caanalyzer import __version__ as moduleversion
+#from caanalyzer import __version__ as moduleversion
+
+def get_version(rel_path):
+    with open(rel_path, 'r') as f:
+        for line in f.read().splitlines():
+            if line.startswith('__version__'):
+                delim = '"' if '"' in line else "'"
+                return line.split(delim)[1]
+        else:
+            raise RuntimeError("Unable to find version string.")
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
     name="CAanalyzer",
-    version=moduleversion,
+    version=get_version("caanalyzer/__init__.py"),
     author="Aiden Rutter/Julian Ball/Jonathan Bryan",
     author_email="azh@utk.edu",
     description="To be used in combination with codeanalytics aggregator",
