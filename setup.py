@@ -1,13 +1,13 @@
 from setuptools import setup, find_packages
 
-import caanalyzer as mainmodule
+from caanalyzer import __version__ as moduleversion
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setup(
     name="CAanalyzer",
-    version=mainmodule.__version__,
+    version=moduleversion,
     author="Aiden Rutter/Julian Ball/Jonathan Bryan",
     author_email="azh@utk.edu",
     description="To be used in combination with codeanalytics aggregator",
