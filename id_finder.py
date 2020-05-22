@@ -28,26 +28,10 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
         unique_ops = set()  # list of operators with starting line and starting position
         unique_lits = set()  # list of literals with starting line and starting position
         unique_ids = set()  # list of identifiers with starting line and starting position
+
         if lang == 'py':
-            #import symtable
             import ast
             import astpretty
-            ids_from_tables = set()
-            '''
-            def recurse_py_tables(sym_tab):
-                nonlocal id_counter
-                ids_from_tables.update(list(sym_tab.get_identifiers()))
-                id_counter += len(list(sym_tab.get_identifiers()))
-                for id in list(sym_tab.get_identifiers()):
-                    id_sym = sym_tab.lookup(id)
-                if sym_tab.has_children():
-                    for child in sym_tab.get_children():
-                        recurse_py_tables(child)
-
-            my_table = symtable.symtable(code=''.join(content), filename='string', compile_type='exec')
-            recurse_py_tables(my_table)
-            unique_ids = ids_from_tables
-            '''
             my_ast = ast.parse(''.join(content))
             pattern = re.compile(".*op=.*,.*")
             pattern2 = re.compile(".*Num\(.*\).*")
@@ -272,37 +256,7 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                         rev_i -= 1
                     ops.append([raw_op, int(location.split(":")[0]), int(location.split(":")[1])])
                     unique_ops.add(raw_op)
-            '''
-            id_pattern = re.compile('\**[a-zA-Z_][a-zA-Z0-9_]*(;|,|\[.*\]|=.*)*')
-            func_pattern = re.compile('([a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*(\(.*\))')
-            for num in range(len(content)):
-                if num not in skip_lines:
-                    # find strings in line
-                    restart = True
-                    while restart:
-                        restart = False
-                        for char_i in range(len(content[num])):
-                            if content[num][char_i] == '"':
-                                for char_j in range(char_i + 1, len(content[num])):
-                                    if content[num][char_j] == '"':
-                                        content[num] = content[num][:char_i] + content[num][char_j + 1:]
-                                        restart = True
-                                        break
-                                if restart:
-                                    break
-                    matches = set()
-                    funcs = func_pattern.search(content[num])
-                    if funcs is not None:
-                        matches.add(funcs.group())
-                        id_counter += 1
-                        content[num] = content[num][:funcs.start()] + content[num][funcs.end() + 1:]
-                    split_line = content[num].split()
-                    for each in split_line:
-                        if id_pattern.fullmatch(each) and each not in c_keywords:
-                            matches.add(each)
-                            id_counter += 1
-                    unique_ids.update(list(matches))
-            '''
+
         elif lang == 'c++':
             import subprocess
             import os
@@ -349,82 +303,59 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                             location = re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line).group(1)
                             ids.append([raw_id, int(location.split(':')[0]), int(location.split(':')[1])])
                             unique_ids.add(raw_id)
-            '''
-            id_pattern = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
-            func_pattern = re.compile('([a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*(\(.*\))')
-            for num in range(len(content)):
-                if num not in skip_lines:
-                    # find strings in line
-                    restart = True
-                    while restart:
-                        restart = False
-                        for char_i in range(len(content[num])):
-                            if content[num][char_i] == '"':
-                                for char_j in range(char_i + 1, len(content[num])):
-                                    if content[num][char_j] == '"':
-                                        content[num] = content[num][:char_i] + content[num][char_j + 1:]
-                                        restart = True
-                                        break
-                                if restart:
-                                    break
-                    matches = set()
-                    funcs = func_pattern.search(content[num])
-                    if funcs is not None:
-                        matches.add(funcs.group())
-                        id_counter += 1
-                        content[num] = content[num][:funcs.start()] + content[num][funcs.end() + 1:]
-                    split_line = content[num].split()
-                    for each in split_line:
-                        if id_pattern.fullmatch(each) and each not in c_plusplus_keywords:
-                            matches.add(each)
-                            id_counter += 1
-                    unique_ids.update(list(matches))
-            '''
+
         elif lang == 'js':
             import esprima
-            items = list(esprima.tokenize(''.join(content)))
+            js_ops = ['=', '+=', '-=', '*=', '**=', '/=', '%=', '<<=', '>>=', '>>>=', \
+                        '&=', '|=', '^=', ',', '+', '-', '*', '**', '/', '%', '++', '--', '<<', '>>', '>>>', '&', \
+                        '|', '^', '!', '~', '&&', '||', '?', ':', '===', '==', '>=', \
+                        '<=', '<', '>', '!=', '!==']
+            items = list(esprima.tokenize(''.join(content), options={'loc': True}))
             for each in items:
                 if each.type == 'Identifier':
                     id_counter += 1
+                    ids.append([each.value, str(each.loc.start.line) + '-' + str(each.loc.end.line),
+                                str(each.loc.start.column) + '-' + str(each.loc.end.column)])
                     unique_ids.add(each.value)
+                if each.type == 'Punctuator' and each.value in js_ops:
+                    op_counter += 1
+                    ops.append([each.value, str(each.loc.start.line) + '-' + str(each.loc.end.line),
+                                str(each.loc.start.column) + '-' + str(each.loc.end.column)])
+                    unique_ops.add(each.value)
+                if each.type == 'String' or each.type == 'Numeric':
+                    lit_counter += 1
+                    lits.append([each.value, str(each.loc.start.line) + '-' + str(each.loc.end.line),
+                                str(each.loc.start.column) + '-' + str(each.loc.end.column)])
+                    unique_lits.add(each.value)
+
         elif lang == 'java':
             import javac_parser
+            java_ops = ['+', '-', '*', '/', '%', '+', '--', '++', '=', '!', '==', '!=', '>', '>=', '<', '<=', '&&',
+                        '||', '?:', 'instanceof', '~', '<<', '>>', '>>>', '&', '^', '|']
             java = javac_parser.Java()
             for each in java.lex(''.join(content)):
+                print(each)
                 if each[0] == 'IDENTIFIER':
                     id_counter += 1
+                    ids.append([each[1], str(each[2][0]) + '-' + str(each[3][0]),
+                                str(each[2][1]) + '-' + str(each[3][1])])
                     unique_ids.add(each[1])
-            '''
-            id_pattern = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
-            func_pattern = re.compile('([a-zA-Z_][a-zA-Z0-9_]*\.)*[a-zA-Z_][a-zA-Z0-9_]*(\(.*\))')
-            for num in range(len(content)):
-                if num not in skip_lines:
-                    # find strings in line
-                    restart = True
-                    while restart:
-                        restart = False
-                        for char_i in range(len(content[num])):
-                            if content[num][char_i] == '"':
-                                for char_j in range(char_i + 1, len(content[num])):
-                                    if content[num][char_j] == '"':
-                                        content[num] = content[num][:char_i] + content[num][char_j + 1:]
-                                        restart = True
-                                        break
-                                if restart:
-                                    break
-                    matches = set()
-                    funcs = func_pattern.search(content[num])
-                    if funcs is not None:
-                        matches.add(funcs.group())
-                        id_counter += 1
-                        content[num] = content[num][:funcs.start()] + content[num][funcs.end() + 1:]
-                    split_line = content[num].split()
-                    for each in split_line:
-                        if id_pattern.fullmatch(each) and each not in java_keywords:
-                            matches.add(each)
-                            id_counter += 1
-                    unique_ids.update(list(matches))
-            '''
+                if each[0] == 'INTLITERAL':
+                    lit_counter += 1
+                    lits.append([each[1], str(each[2][0]) + '-' + str(each[3][0]),
+                                str(each[2][1]) + '-' + str(each[3][1])])
+                    unique_lits.add(each[1])
+                if each[0] == 'STRINGLITERAL':
+                    lit_counter += 1
+                    lits.append([each[1][1:len(each[1])-1], str(each[2][0]) + '-' + str(each[3][0]),
+                                 str(each[2][1]) + '-' + str(each[3][1])])
+                    unique_lits.add(each[1][1:len(each[1])-1])
+                if each[1] in java_ops:
+                    op_counter += 1
+                    ops.append([each[1], str(each[2][0]) + '-' + str(each[3][0]),
+                                str(each[2][1]) + '-' + str(each[3][1])])
+                    unique_ops.add(each[1])
+
         if verbose:
             print()
             print("IDENTIFIERS")
