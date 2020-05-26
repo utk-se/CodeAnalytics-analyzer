@@ -16,7 +16,7 @@ c_plusplus_ops = ['equal', 'plus', 'minus', 'star', 'slash', 'percent', 'amp', '
                   'exclaim']
 
 
-def find_ids(path, lang, skip_lines=[], verbose=0):
+def find_ids(path, lang, verbose=0):
     with open(path, 'r') as f:
         content = f.readlines()
         id_counter = 0
@@ -30,8 +30,8 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
         unique_ids = set()  # list of identifiers with starting line and starting position
 
         if lang == 'py':
-            import ast
             import astpretty
+            import ast
             my_ast = ast.parse(''.join(content))
             pattern = re.compile(".*op=.*,.*")
             pattern2 = re.compile(".*Num\(.*\).*")
@@ -46,7 +46,6 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                                 ast_piece_split[2].strip()[11:len(ast_piece_split[2].strip())-1]])
                     unique_ops.add('=')
                 for i, each in enumerate(ast_piece_split):
-                    print(each)
                     if bool(re.fullmatch(pattern4, each)):
                         id_counter += 1
                         info = re.search(".*Name\((.*)\).*", each).group(1)
@@ -62,7 +61,6 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                     if bool(re.fullmatch(pattern3, each)):
                         info = re.search(".*Str\((.*)\).*", each).group(1)
                         info = re.split(", (?=(?:[^\']*\'[^\']*\')*[^\']*$)", info)
-                        print(info)
                         lits.append([info[2][3:len(info[2])-1], info[0][7:], info[1][11:]])
                         unique_lits.add(info[2][3:len(info[2])-1])
                     if bool(re.fullmatch(pattern, each)):
@@ -179,8 +177,8 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
             ast = str(ast)
             l_ast = str(ast).split('\n')
             for i, ast_line in enumerate(l_ast):
-                print(ast_line)
-                if bool(re.search(pattern, ast_line)):  #
+                #print(ast_line)
+                if bool(re.search(pattern, ast_line)):
                     id_counter += 1
                     num_spaces = len(re.search("(.*)\"_nodetype.*", ast_line).group(1))
                     regex = r'.{' + str(num_spaces) + r'}\"name\"\: \".*\".*'
@@ -304,6 +302,7 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
                             ids.append([raw_id, int(location.split(':')[0]), int(location.split(':')[1])])
                             unique_ids.add(raw_id)
 
+        # format: [id/lit/op, [start line, end line], [start offset, end offset]]
         elif lang == 'js':
             import esprima
             js_ops = ['=', '+=', '-=', '*=', '**=', '/=', '%=', '<<=', '>>=', '>>>=', \
@@ -314,46 +313,46 @@ def find_ids(path, lang, skip_lines=[], verbose=0):
             for each in items:
                 if each.type == 'Identifier':
                     id_counter += 1
-                    ids.append([each.value, str(each.loc.start.line) + '-' + str(each.loc.end.line),
-                                str(each.loc.start.column) + '-' + str(each.loc.end.column)])
+                    ids.append([each.value, [each.loc.start.line, each.loc.end.line],
+                                each.loc.start.column, each.loc.end.column])
                     unique_ids.add(each.value)
                 if each.type == 'Punctuator' and each.value in js_ops:
                     op_counter += 1
-                    ops.append([each.value, str(each.loc.start.line) + '-' + str(each.loc.end.line),
-                                str(each.loc.start.column) + '-' + str(each.loc.end.column)])
+                    ops.append([each.value, [each.loc.start.line, each.loc.end.line],
+                                each.loc.start.column, each.loc.end.column])
                     unique_ops.add(each.value)
                 if each.type == 'String' or each.type == 'Numeric':
                     lit_counter += 1
-                    lits.append([each.value, str(each.loc.start.line) + '-' + str(each.loc.end.line),
-                                str(each.loc.start.column) + '-' + str(each.loc.end.column)])
+                    lits.append([each.value, [each.loc.start.line, each.loc.end.line],
+                                each.loc.start.column, each.loc.end.column])
                     unique_lits.add(each.value)
 
+        # format: [id/lit/op, [start line, end line], [start offset, end offset]]
         elif lang == 'java':
             import javac_parser
             java_ops = ['+', '-', '*', '/', '%', '+', '--', '++', '=', '!', '==', '!=', '>', '>=', '<', '<=', '&&',
                         '||', '?:', 'instanceof', '~', '<<', '>>', '>>>', '&', '^', '|']
             java = javac_parser.Java()
             for each in java.lex(''.join(content)):
-                print(each)
                 if each[0] == 'IDENTIFIER':
                     id_counter += 1
-                    ids.append([each[1], str(each[2][0]) + '-' + str(each[3][0]),
-                                str(each[2][1]) + '-' + str(each[3][1])])
+                    ids.append([each[1], [each[2][0], each[3][0]],
+                                [each[2][1], each[3][1]]])
                     unique_ids.add(each[1])
                 if each[0] == 'INTLITERAL':
                     lit_counter += 1
-                    lits.append([each[1], str(each[2][0]) + '-' + str(each[3][0]),
-                                str(each[2][1]) + '-' + str(each[3][1])])
+                    lits.append([each[1], [each[2][0], each[3][0]],
+                                [each[2][1], each[3][1]]])
                     unique_lits.add(each[1])
                 if each[0] == 'STRINGLITERAL':
                     lit_counter += 1
-                    lits.append([each[1][1:len(each[1])-1], str(each[2][0]) + '-' + str(each[3][0]),
-                                 str(each[2][1]) + '-' + str(each[3][1])])
+                    lits.append([each[1][1:len(each[1])-1], [each[2][0], each[3][0]],
+                                [each[2][1], each[3][1]]])
                     unique_lits.add(each[1][1:len(each[1])-1])
                 if each[1] in java_ops:
                     op_counter += 1
-                    ops.append([each[1], str(each[2][0]) + '-' + str(each[3][0]),
-                                str(each[2][1]) + '-' + str(each[3][1])])
+                    ops.append([each[1], [each[2][0], each[3][0]],
+                                [each[2][1], each[3][1]]])
                     unique_ops.add(each[1])
 
         if verbose:

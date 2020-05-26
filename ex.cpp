@@ -1,6 +1,7 @@
 #include <stdio.h>
 using namespace std;
-
+/* gang gang */
+ // gang?
 int main() {
     int ayy = 0;
     double yuh = 0.0;
