@@ -184,10 +184,21 @@ def find_ids(path, lang, verbose=0):
                     regex = r'.{' + str(num_spaces) + r'}\"name\"\: \".*\".*'
                     location = []
                     raw_id = ''
-                    for line in l_ast[i+1:]:
+                    for j, line in enumerate(l_ast[i+1:]):
                         if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}"coord": ".*:(\d+:\d+)".*', line)):
                             location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
                                                     line).group(1)
+                        if line.strip().startswith('"init"') and line.strip() != '"init": null,':
+                            for init_line in l_ast[i+j+1:]:
+                                if init_line.strip().startswith('"coord"'):
+                                    init_loc = re.fullmatch(r'.*"coord": ".*:(\d+:\d+)".*', init_line).group(1)
+                                    init_offset = int(location.split(":")[1]) + int((int(init_loc.split(":")[1]) -
+                                                                                 int(location.split(":")[1]))/2)
+                                    ops.append(['=', int(init_loc.split(":")[0]), init_offset])
+                                    op_counter += 1
+                                    unique_ops.add('=')
+                                if init_line.strip().startswith('}'):
+                                    break
                         if bool(re.fullmatch(regex, line)):
                             try:
                                 raw_id = re.search(r'.*\"name\"\: "(.*)".*', line).group(1)

@@ -2,8 +2,8 @@ import id_finder
 import lib_finder
 import comment_finder
 
-#comments = comment_finder.find_comments("ex.js", lang='js', verbose=0)
-#print(comments)
-libs = lib_finder.find_libs("ex.java", lang='java')
+comments = comment_finder.find_comments("ex.c", lang='c', verbose=0)
+print(comments)
+libs = lib_finder.find_libs("ex.c", lang='c')
 print(libs)
-#id_finder.find_ids("ex.js", 'js', verbose=1)
+id_finder.find_ids("ex.c", 'c', verbose=1)

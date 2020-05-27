@@ -3,7 +3,7 @@
 int main() {
     /* sup
     */
-    int a;
+    int a = 0;
     int notherechief; // yo
     a = 1;
     a = isalnum(a);
