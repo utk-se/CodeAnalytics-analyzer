@@ -1,3 +1,22 @@
+"""CodeAnalytics Analyzer
+
+A set of tools to gather metrics about code repositories, files, or 
+individual lines that can be used to compare code projects. Given a 
+repository, file, or line, produces a static analysis of the visual 
+structure of the code within, such as use of whitespace, line length, 
+and distribution of code elements, such as tokens, methods, and classes.
+
+Notes
+--------------------------------------------------------------------------
+    Initialize an instance of Repo or File with a filepath, or one of Line
+    with a string, to gather analytics on that source.
+    
+    Supply an ignorefile to exclude files and directories from analysis.
+
+    Retrieve results as a serializable dictionary by calling the export()
+    method.
+"""
+
 import os
 
 import lizard

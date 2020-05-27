@@ -14,3 +14,4 @@ def analyze(path):
 
 if __name__ == "__main__":
     log.info("Running analyze on current directory.")
+    print(analyze('..').head())
