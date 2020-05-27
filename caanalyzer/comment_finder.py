@@ -1,4 +1,6 @@
 import re
+from cadistributor import log
+
 
 def find_comments(path, lang, verbose=0):
     with open(path, 'r') as f:
@@ -64,7 +66,7 @@ def find_comments(path, lang, verbose=0):
                         print("block on", num+1)
                     for num2, line2 in enumerate(content[num + 1:]):
                         num2 += (num + 1)
-                        lines.append(num2)
+                        lines.append(num2)'
                         skip_lines.append(num2)
                         if verbose:
                             print("block on", num2+1)
@@ -92,9 +94,12 @@ def find_comments(path, lang, verbose=0):
             # com_obj = comment_parser.extract_comments_from_str(''.join(content), mime=mime.from_file(path))
             # print(com_obj)
 
-            single_line = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/")
-            one_line_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*].*[*]\/")
-            begin_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]")
+            single_line = re.compile(
+                "^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/")
+            one_line_block = re.compile(
+                "^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*].*[*]\/")
+            begin_block = re.compile(
+                "^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/[*]")
             end_block = re.compile("^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*[*]\/")
             skip_lines = []
             for num, line in enumerate(content):
@@ -121,9 +126,11 @@ def find_comments(path, lang, verbose=0):
                         if verbose:
                             print("block on", num2 + 1)
                         if end_block.match(line2):
-                            l_offset = len(re.search(r"(.*)[*]\/", line2).group(1))
+                            l_offset = len(
+                                re.search(r"(.*)[*]\/", line2).group(1))
                             comment += re.search(r"(.*)[*]\/", line2).group(1)
-                            comments.append([comment.strip(), [num, offset], [num2, l_offset]])
+                            comments.append(
+                                [comment.strip(), [num, offset], [num2, l_offset]])
                             break
                         else:
                             comment += line2

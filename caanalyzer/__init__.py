@@ -1,15 +1,16 @@
 
-"""CA Analyzer
+"""CodeAnalytics Analyzer
 
-A program to gather metrics about a single repo that can be used to compare repos.
+A set of tools to gather metrics about code repositories, files, or 
+individual lines that can be used to compare code projects.
 
-caanalyzer can be run as a program to analyze the current directory (__main__)
-
-Result data is retrieved via analyzer.Analyzer():analyze()
+Notes
+--------------------------------------------------------------------------
+    caanalyzer can be run as a program to analyze the current directory.
 """
 
 from cadistributor import log
-from .analyzer import Analyzer
+from .analyzer import CodeRepo
 from .__main__ import analyze
 
-__version__ = "0.0.1"
+__version__ = "0.0.4"
