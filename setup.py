@@ -26,6 +26,10 @@ setup(
     packages=find_packages(),
     install_requires=[
         "lizard>=1.17.3",
+        "esprima>=4.0.1",
+        "astpretty>=2.0.0",
+        "javac-parser>=1.0.0",
+        "pycparser>=2.20",
         "ca-distributor @ git+ssh://git@github.com/utk-se/CodeAnalytics-distributor.git#egg=ca-distributor-0.1"
     ],
     classifiers=[

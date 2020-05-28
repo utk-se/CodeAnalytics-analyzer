@@ -42,16 +42,16 @@ def find_ids(path, lang, verbose=0):
                 ast_piece_split = ast_piece.split('\n')
                 if ast_piece.startswith("Assign"):
                     op_counter += 1
-                    ops.append(['=', ast_piece_split[1].strip()[7:len(ast_piece_split[1].strip())-1],
-                                ast_piece_split[2].strip()[11:len(ast_piece_split[2].strip())-1]])
+                    ops.append(['=', ast_piece_split[1].strip()[7:len(ast_piece_split[1].strip()) - 1],
+                                ast_piece_split[2].strip()[11:len(ast_piece_split[2].strip()) - 1]])
                     unique_ops.add('=')
                 for i, each in enumerate(ast_piece_split):
                     if bool(re.fullmatch(pattern4, each)):
                         id_counter += 1
                         info = re.search(".*Name\((.*)\).*", each).group(1)
                         info = info.split()
-                        ids.append([info[2][4:len(info[2])-2], info[0][7:], info[1][11:]])
-                        unique_ids.add(info[2][4:len(info[2])-2])
+                        ids.append([info[2][4:len(info[2]) - 2], info[0][7:], info[1][11:]])
+                        unique_ids.add(info[2][4:len(info[2]) - 2])
                     if bool(re.fullmatch(pattern2, each)):
                         lit_counter += 1
                         info = re.search(".*Num\((.*)\).*", each).group(1)
@@ -61,8 +61,8 @@ def find_ids(path, lang, verbose=0):
                     if bool(re.fullmatch(pattern3, each)):
                         info = re.search(".*Str\((.*)\).*", each).group(1)
                         info = re.split(", (?=(?:[^\']*\'[^\']*\')*[^\']*$)", info)
-                        lits.append([info[2][3:len(info[2])-1], info[0][7:], info[1][11:]])
-                        unique_lits.add(info[2][3:len(info[2])-1])
+                        lits.append([info[2][3:len(info[2]) - 1], info[0][7:], info[1][11:]])
+                        unique_lits.add(info[2][3:len(info[2]) - 1])
                     if bool(re.fullmatch(pattern, each)):
                         op_counter += 1
                         num_spaces = len(re.search("(.*)op=.*", each).group(1))
@@ -78,8 +78,8 @@ def find_ids(path, lang, verbose=0):
                             if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}col_offset=.*', ast_piece_split[rev_i])):
                                 found = True
                                 ops.append([raw_op,
-                                            ast_piece_split[rev_i-1].strip()[7:len(ast_piece_split[rev_i-1].strip())-1],
-                                            ast_piece_split[rev_i].strip()[11:len(ast_piece_split[rev_i].strip())-1]])
+                                            ast_piece_split[rev_i - 1].strip()[7:len(ast_piece_split[rev_i - 1].strip()) - 1],
+                                            ast_piece_split[rev_i].strip()[11:len(ast_piece_split[rev_i].strip()) - 1]])
                                 unique_ops.add(raw_op)
                             rev_i -= 1
 
@@ -177,23 +177,22 @@ def find_ids(path, lang, verbose=0):
             ast = str(ast)
             l_ast = str(ast).split('\n')
             for i, ast_line in enumerate(l_ast):
-                #print(ast_line)
                 if bool(re.search(pattern, ast_line)):
                     id_counter += 1
                     num_spaces = len(re.search("(.*)\"_nodetype.*", ast_line).group(1))
                     regex = r'.{' + str(num_spaces) + r'}\"name\"\: \".*\".*'
                     location = []
                     raw_id = ''
-                    for j, line in enumerate(l_ast[i+1:]):
+                    for j, line in enumerate(l_ast[i + 1:]):
                         if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}"coord": ".*:(\d+:\d+)".*', line)):
                             location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
                                                     line).group(1)
                         if line.strip().startswith('"init"') and line.strip() != '"init": null,':
-                            for init_line in l_ast[i+j+1:]:
+                            for init_line in l_ast[i + j + 1:]:
                                 if init_line.strip().startswith('"coord"'):
                                     init_loc = re.fullmatch(r'.*"coord": ".*:(\d+:\d+)".*', init_line).group(1)
                                     init_offset = int(location.split(":")[1]) + int((int(init_loc.split(":")[1]) -
-                                                                                 int(location.split(":")[1]))/2)
+                                                                                     int(location.split(":")[1])) / 2)
                                     ops.append(['=', int(init_loc.split(":")[0]), init_offset])
                                     op_counter += 1
                                     unique_ops.add('=')
@@ -210,10 +209,10 @@ def find_ids(path, lang, verbose=0):
                 if bool(re.search(pattern2, ast_line)):
                     id_counter += 1
                     try:
-                        raw_id = re.search('.*\"name\"\: "(.*)".*', l_ast[i+2]).group(1)
+                        raw_id = re.search('.*\"name\"\: "(.*)".*', l_ast[i + 2]).group(1)
                     except AttributeError:
                         raw_id = ''
-                    location = re.search('.*\"coord\"\: \".*\:(\d+\:\d+)\".*', l_ast[i+1]).group(1)
+                    location = re.search('.*\"coord\"\: \".*\:(\d+\:\d+)\".*', l_ast[i + 1]).group(1)
                     ids.append([raw_id, int(location.split(":")[0]), int(location.split(":")[1])])
                     unique_ids.add(raw_id)
                 if bool(re.search(pattern3, ast_line)):
@@ -238,7 +237,7 @@ def find_ids(path, lang, verbose=0):
                                     except ValueError:
                                         raw_lit = bytes(raw_lit, "utf-8").decode("unicode_escape")
                                         raw_lit = bytes(raw_lit, "utf-8").decode("unicode_escape")
-                                        raw_lit = raw_lit[1:len(raw_lit)-1]
+                                        raw_lit = raw_lit[1:len(raw_lit) - 1]
                             except AttributeError:
                                 raw_lit = ''
                             break
@@ -279,7 +278,6 @@ def find_ids(path, lang, verbose=0):
             ast_str = ast_str.decode('utf-8')
             l_ast = ast_str.split('\n')
             for ast_line in l_ast:
-                # print(ast_line)
                 if ast_line.startswith(tuple(c_plusplus_ops)):
                     raw_op = ast_line.split()[1][1:len(ast_line.split()[1]) - 1]
                     op_counter += 1
@@ -316,10 +314,10 @@ def find_ids(path, lang, verbose=0):
         # format: [id/lit/op, [start line, end line], [start offset, end offset]]
         elif lang == 'js':
             import esprima
-            js_ops = ['=', '+=', '-=', '*=', '**=', '/=', '%=', '<<=', '>>=', '>>>=', \
-                        '&=', '|=', '^=', ',', '+', '-', '*', '**', '/', '%', '++', '--', '<<', '>>', '>>>', '&', \
-                        '|', '^', '!', '~', '&&', '||', '?', ':', '===', '==', '>=', \
-                        '<=', '<', '>', '!=', '!==']
+            js_ops = ['=', '+=', '-=', '*=', '**=', '/=', '%=', '<<=', '>>=', '>>>=',
+                      '&=', '|=', '^=', ',', '+', '-', '*', '**', '/', '%', '++', '--', '<<', '>>', '>>>', '&',
+                      '|', '^', '!', '~', '&&', '||', '?', ':', '===', '==', '>=',
+                      '<=', '<', '>', '!=', '!==']
             items = list(esprima.tokenize(''.join(content), options={'loc': True}))
             for each in items:
                 if each.type == 'Identifier':
@@ -335,7 +333,7 @@ def find_ids(path, lang, verbose=0):
                 if each.type == 'String' or each.type == 'Numeric':
                     lit_counter += 1
                     lits.append([each.value, [each.loc.start.line, each.loc.end.line],
-                                each.loc.start.column, each.loc.end.column])
+                                 each.loc.start.column, each.loc.end.column])
                     unique_lits.add(each.value)
 
         # format: [id/lit/op, [start line, end line], [start offset, end offset]]
@@ -353,13 +351,13 @@ def find_ids(path, lang, verbose=0):
                 if each[0] == 'INTLITERAL':
                     lit_counter += 1
                     lits.append([each[1], [each[2][0], each[3][0]],
-                                [each[2][1], each[3][1]]])
+                                 [each[2][1], each[3][1]]])
                     unique_lits.add(each[1])
                 if each[0] == 'STRINGLITERAL':
                     lit_counter += 1
-                    lits.append([each[1][1:len(each[1])-1], [each[2][0], each[3][0]],
-                                [each[2][1], each[3][1]]])
-                    unique_lits.add(each[1][1:len(each[1])-1])
+                    lits.append([each[1][1:len(each[1]) - 1], [each[2][0], each[3][0]],
+                                 [each[2][1], each[3][1]]])
+                    unique_lits.add(each[1][1:len(each[1]) - 1])
                 if each[1] in java_ops:
                     op_counter += 1
                     ops.append([each[1], [each[2][0], each[3][0]],
@@ -385,6 +383,6 @@ def find_ids(path, lang, verbose=0):
             print(unique_ops)
             print("num ops found:", op_counter)
             print("unique ops:", len(unique_ops))
-        # return all above packaged into a tuple in the same order printed above without unique count since
+        # return all above in a tuple in the same order printed above without unique count since
         # it can be obtained by calling len()
         return tuple([ids, unique_ids, id_counter, lits, unique_lits, lit_counter, ops, unique_ops, op_counter])
