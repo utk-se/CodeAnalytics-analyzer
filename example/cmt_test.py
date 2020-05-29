@@ -1,9 +1,12 @@
-import id_finder
-import lib_finder
-import comment_finder
+import sys
+sys.path.append('../')
 
-comments = comment_finder.find_comments("ex.c", lang='c', verbose=0)
+from caanalyzer import id_finder
+from caanalyzer import lib_finder
+from caanalyzer import comment_finder
+
+comments = comment_finder.find_comments("ex.java", lang='java')
 print(comments)
-libs = lib_finder.find_libs("ex.c", lang='c')
+libs = lib_finder.find_libs("ex.java", lang='java')
 print(libs)
-id_finder.find_ids("ex.c", 'c', verbose=1)
+id_finder.find_ids("ex.java", 'java', verbose=1)

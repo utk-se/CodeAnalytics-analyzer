@@ -1,3 +1,8 @@
+class LangNotSupportedError(Exception):
+    """Raised when user tries to parse an unsupported language"""
+    pass
+
+
 # format: lib name, line number
 def find_libs(path, lang):
     with open(path, 'r') as f:
@@ -23,8 +28,8 @@ def find_libs(path, lang):
             for x, line in enumerate(content):
                 if line.strip().startswith("import"):
                     broken_line = line.strip().split()
-                    lib_name = broken_line[len(broken_line)-1]
-                    lib_name = lib_name[:len(lib_name)-1]
+                    lib_name = broken_line[len(broken_line) - 1]
+                    lib_name = lib_name[:len(lib_name) - 1]
                     libs.append([lib_name, x])
         elif lang == 'js':
             import re
@@ -45,6 +50,5 @@ def find_libs(path, lang):
                     res3 = res3.group(1).strip()[1:-1]
                     libs.append([res3, x])
         else:
-            print(lang, "not supported yet")
-            exit()
+            raise LangNotSupportedError(lang + " not supported yet")
     return libs

@@ -1,4 +1,5 @@
 import re
+from cadistributor import log
 
 c_plusplus_keywords = ['asm', 'else', 'new', 'this', 'auto', 'enum', 'operator', 'throw', 'bool', 'explicit',
                        'private', 'true', 'break', 'export', 'protected', 'try', 'case', 'extern', 'public', 'typedef',
@@ -33,10 +34,10 @@ def find_ids(path, lang, verbose=0):
             import astpretty
             import ast
             my_ast = ast.parse(''.join(content))
-            pattern = re.compile(".*op=.*,.*")
-            pattern2 = re.compile(".*Num\(.*\).*")
-            pattern3 = re.compile(".*Str\(.*\).*")
-            pattern4 = re.compile(".*Name\(.*\).*")
+            pattern = re.compile(r".*op=.*,.*")
+            pattern2 = re.compile(r".*Num\(.*\).*")
+            pattern3 = re.compile(r".*Str\(.*\).*")
+            pattern4 = re.compile(r".*Name\(.*\).*")
             for x in range(len(my_ast.body)):
                 ast_piece = astpretty.pformat(my_ast.body[x])
                 ast_piece_split = ast_piece.split('\n')
@@ -48,18 +49,18 @@ def find_ids(path, lang, verbose=0):
                 for i, each in enumerate(ast_piece_split):
                     if bool(re.fullmatch(pattern4, each)):
                         id_counter += 1
-                        info = re.search(".*Name\((.*)\).*", each).group(1)
+                        info = re.search(r".*Name\((.*)\).*", each).group(1)
                         info = info.split()
                         ids.append([info[2][4:len(info[2]) - 2], info[0][7:], info[1][11:]])
                         unique_ids.add(info[2][4:len(info[2]) - 2])
                     if bool(re.fullmatch(pattern2, each)):
                         lit_counter += 1
-                        info = re.search(".*Num\((.*)\).*", each).group(1)
+                        info = re.search(r".*Num\((.*)\).*", each).group(1)
                         info = info.split(', ')
                         lits.append([info[2][2:], info[0][7:], info[1][11:]])
                         unique_lits.add(info[2][2:])
                     if bool(re.fullmatch(pattern3, each)):
-                        info = re.search(".*Str\((.*)\).*", each).group(1)
+                        info = re.search(r".*Str\((.*)\).*", each).group(1)
                         info = re.split(", (?=(?:[^\']*\'[^\']*\')*[^\']*$)", info)
                         lits.append([info[2][3:len(info[2]) - 1], info[0][7:], info[1][11:]])
                         unique_lits.add(info[2][3:len(info[2]) - 1])
@@ -70,8 +71,7 @@ def find_ids(path, lang, verbose=0):
                         try:
                             raw_op = re.search(r'.*op=(.*)\(\).*', each).group(1)
                         except AttributeError as e:
-                            print(e)
-                            exit()
+                            log.error(e)
                         found = False
                         rev_i = i - 1
                         while not found:
@@ -166,7 +166,8 @@ def find_ids(path, lang, verbose=0):
             if os.name == 'nt':
                 ast = parse_file(os.getcwd() + "\\" + path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
             else:
-                ast = parse_file(os.getcwd() + '/' + path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
+                include_path = r'-I' + os.getcwd() + r'/../fake_libc_include'
+                ast = parse_file(os.getcwd() + '/../example/' + path, use_cpp=True, cpp_args=include_path)
 
             pattern = re.compile(".*\"_nodetype\"\: \"Decl\".*")
             pattern2 = re.compile(".*\"_nodetype\"\: \"ID\".*")
@@ -249,8 +250,7 @@ def find_ids(path, lang, verbose=0):
                     try:
                         raw_op = re.search(r'.*\"op\"\: "(.*)".*', ast_line).group(1)
                     except AttributeError as e:
-                        print(e)
-                        exit()
+                        log.error(e)
                     num_spaces = len(re.search("(.*)\"op.*", ast_line).group(1))
                     regex = r'.{' + str(num_spaces) + r'}\"coord\"\: \".*\".*'
                     location = []
@@ -268,9 +268,9 @@ def find_ids(path, lang, verbose=0):
         elif lang == 'c++':
             import subprocess
             import os
-            cwd = os.path.dirname(__file__);
+            cwd = os.path.dirname(__file__)
             if os.name != 'nt':
-                filename = cwd + '/' + path
+                filename = cwd + '/../example/' + path
             cmd = 'clang++ -cc1 -std=c++11 -stdlib=libstdc++ -I/usr/include/c++/7 -I/usr/include/c++/7.5.0 -I/usr/include/x86_64-linux-gnu/c++/7 -I/usr/include/x86_64-linux-gnu/c++/7.5.0 -dump-raw-tokens ' + filename + ' 2>&1'
             p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
             p.wait()
@@ -365,24 +365,24 @@ def find_ids(path, lang, verbose=0):
                     unique_ops.add(each[1])
 
         if verbose:
-            print()
-            print("IDENTIFIERS")
-            print(ids)
-            print(unique_ids)
-            print("num ids found:", id_counter)
-            print("unique ids:", len(unique_ids))
-            print()
-            print("LITERALS")
-            print(lits)
-            print(unique_lits)
-            print("num ops found:", lit_counter)
-            print("unique ops:", len(unique_lits))
-            print()
-            print("OPERATORS")
-            print(ops)
-            print(unique_ops)
-            print("num ops found:", op_counter)
-            print("unique ops:", len(unique_ops))
+            # log.info('\n')
+            log.info("IDENTIFIERS")
+            log.info(ids)
+            log.info(unique_ids)
+            log.info("num ids found: " + str(id_counter))
+            log.info("unique ids: " + str(len(unique_ids)))
+            # log.info('\n')
+            log.info("LITERALS")
+            log.info(lits)
+            log.info(unique_lits)
+            log.info("num ops found: " + str(lit_counter))
+            log.info("unique ops: " + str(len(unique_lits)))
+            # log.info('\n')
+            log.info("OPERATORS")
+            log.info(ops)
+            log.info(unique_ops)
+            log.info("num ops found: " + str(op_counter))
+            log.info("unique ops: " + str(len(unique_ops)))
         # return all above in a tuple in the same order printed above without unique count since
         # it can be obtained by calling len()
         return tuple([ids, unique_ids, id_counter, lits, unique_lits, lit_counter, ops, unique_ops, op_counter])
