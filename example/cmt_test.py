@@ -4,9 +4,16 @@ sys.path.append('../')
 from caanalyzer import id_finder
 from caanalyzer import lib_finder
 from caanalyzer import comment_finder
+from caanalyzer import class_finder
 
-comments = comment_finder.find_comments("ex.java", lang='java')
-print(comments)
-libs = lib_finder.find_libs("ex.java", lang='java')
-print(libs)
-id_finder.find_ids("ex.java", 'java', verbose=1)
+lang = 'java'
+
+with open("ex."+lang, 'r') as f:
+    content = f.readlines()
+    classes = class_finder.find_classes(content, lang=lang, verbose=1)
+    print(classes)
+    #comments = comment_finder.find_comments(content, path="ex."+lang, lang=lang)
+    #print(comments)
+    #libs = lib_finder.find_libs(content, lang=lang)
+    #print(libs)
+    #id_finder.find_ids(content, path="ex."+lang, lang=lang, verbose=0)

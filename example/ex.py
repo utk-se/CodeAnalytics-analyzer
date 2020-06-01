@@ -1,5 +1,9 @@
 # Solve the quadratic equation ax**2 + bx + c = 0
 
+
+class myclass:
+    pass
+
 # import complex math module
 import cmath # test
 a = 1

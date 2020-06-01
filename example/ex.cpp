@@ -2,6 +2,9 @@
 using namespace std;
 /* gang gang */
  // gang?
+
+struct Complex { double re, im; };
+
 int main() {
     int ayy = 0;
     double yuh = 0.0;

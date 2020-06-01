@@ -9,6 +9,13 @@ import defaultExport, { export1 [ , [...] ] } from "module-name";
 import defaultExport, * as name from "module-name";
 import "module-name";
 var promise = import("module-name");
+
+class Car {
+  constructor(brand) {
+    this.carname = brand;
+  }
+}
+
 function showAlert() {
     var msg = 'Your message here';
     var x = 0 + 1;

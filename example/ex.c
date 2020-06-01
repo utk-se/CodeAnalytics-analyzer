@@ -1,5 +1,10 @@
 #include <stdio.h>
 #include <math.h>
+
+struct Complex {
+    double re, im;
+};
+
 int main() {
     /* sup
     */
