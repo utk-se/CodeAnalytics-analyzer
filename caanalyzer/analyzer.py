@@ -27,7 +27,7 @@ from .comment_finder import find_comments
 from .id_finder import find_ids
 from cadistributor import log
 
-SUPPORTED_FILETYPES = ["cpp", "h", "java", "js", "py"]
+SUPPORTED_FILETYPES = ["c", "cpp", "h", "java", "js", "py"]
 """Extensions of supported filetypes (list of str)."""
 
 ESC_SEP = re.escape(os.sep)
@@ -346,7 +346,7 @@ class File:
         self.comments = find_comments(lines, file_path, file_ext)
 
         # --------------------------------------------------------
-        # TODO: Identifiers, Literals, and Operators
+        # Identifiers, Literals, and Operators
         # --------------------------------------------------------
         ids = find_ids(lines, file_path, file_ext)
         self.ids = ids[0]
