@@ -3,6 +3,9 @@
 
 class myclass:
     pass
+    pass
+
+    x = 0
 
 # import complex math module
 import cmath # test

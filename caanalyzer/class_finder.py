@@ -1,5 +1,6 @@
 import re
 from cadistributor import log
+from .exceptions import UnsupportedLanguageException
 
 
 def space_counter(string):  # counts num spaces before class keyword
@@ -14,33 +15,14 @@ def space_counter(string):  # counts num spaces before class keyword
 
 def find_classes(content, lang, verbose=0):
     class_tuples = []
-    if lang == 'py':
-        pattern = re.compile(r"\s*class\s\w*:\n")
-        for line_no_start, line in enumerate(content):
-            if pattern.match(line) is not None:
-                if verbose:
-                    log.info("found class at line # " + str(line_no_start + 1))
-                # finding end of class
-                space_count_1 = space_counter(line)
-                if verbose:
-                    log.info('space count ' + str(space_count_1))
-                eof_bool = True
-                for line_no_end, line2 in enumerate(content[line_no_start + 1:]):
-                    line_no_end += line_no_start
-                    if space_count_1 == space_counter(line2):
-                        eof_bool = False
-                        if verbose:
-                            log.info("found end of class at line # " + str(line_no_end + 1))
-                        class_tuples.append(
-                            tuple([line_no_start, line_no_end]))
-                        break
-                if eof_bool:
-                    if verbose:
-                        log.info('found end of class at eof line # ' + str(line_no_end + 2))
-                    class_tuples.append(
-                        tuple([line_no_start, line_no_end + 1]))
+    if lang == '.py':
+        import ast
+        my_ast = ast.parse(''.join(content))
+        for each in my_ast.body:
+            if type(each).__name__ == 'ClassDef':
+                class_tuples.append(tuple([each.lineno - 1, each.body[len(each.body)-1].lineno - 1, 0, 1]))
 
-    elif lang == 'js':
+    elif lang == '.js':
         import esprima
         items = list(esprima.tokenize(''.join(content), options={'loc': True}))
         l_brackets = 0
@@ -59,10 +41,11 @@ def find_classes(content, lang, verbose=0):
                     if (l_brackets - r_brackets == 0) and end_check:
                         if verbose:
                             log.info("found end of class at line # " + str(each2.loc.start.line))
-                        class_tuples.append(tuple([each.loc.start.line - 1, each2.loc.start.line - 1]))
+                        # class_tuples.append(tuple([each.loc.start.line - 1, each2.loc.start.line - 1]))
+                        class_tuples.append(tuple([each.loc.start.line - 1, each2.loc.start.line - 1, 0, 1]))
                         break
 
-    elif lang == 'java':
+    elif lang == '.java':
         import javac_parser
         java = javac_parser.Java()
         l_brackets = 0
@@ -81,10 +64,11 @@ def find_classes(content, lang, verbose=0):
                     if (l_brackets - r_brackets == 0) and end_check:
                         if verbose:
                             log.info("found end of class at line # " + str(each2[2][0]))
-                        class_tuples.append(tuple([each[2][0] - 1, each2[2][0] - 1]))
+                        # class_tuples.append(tuple([each[2][0] - 1, each2[2][0] - 1]))
+                        class_tuples.append(tuple([each[2][0] - 1, each2[2][0] - 1, 0, 1]))
                         break
 
-    elif lang == 'c' or lang == 'cpp':
+    elif lang == '.c' or lang == '.cpp' or lang == '.h':
         pattern = re.compile(r"\s*(class|struct)\s\w*\s*{?\n")
         pattern2 = re.compile(r"\s*(class|struct)\s\w*\n")
         pattern3 = re.compile(r"\s*{")
@@ -105,7 +89,8 @@ def find_classes(content, lang, verbose=0):
                                 right_curly_count += 1
                             if left_curly_count == right_curly_count:
                                 class_tuples.append(
-                                    tuple([line_no_start, line_no_end]))
+                                    # tuple([line_no_start, line_no_end]))
+                                    tuple([line_no_start, line_no_end, 0, 1]))
                                 if verbose:
                                     log.info(
                                         'found end of class at line # ' + str(line_no_end + 1))
@@ -124,8 +109,13 @@ def find_classes(content, lang, verbose=0):
                             right_curly_count += 1
                         if left_curly_count == right_curly_count:
                             class_tuples.append(
-                                tuple([line_no_start, line_no_end + 1]))
+                                # tuple([line_no_start, line_no_end + 1]))
+                                tuple([line_no_start, line_no_end + 1, 0, 1]))
                             if verbose:
                                 log.info('found end of class at line # ' + str(line_no_end + 2))
                             break
+
+    else:
+        raise UnsupportedLanguageException(lang + " not supported yet")
+
     return class_tuples

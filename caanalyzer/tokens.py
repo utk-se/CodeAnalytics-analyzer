@@ -2,6 +2,10 @@ import lizard
 import numpy as np
 from .util import findnth, splitWithIndices, line_start, line_end
 from cadistributor import log
+from .class_finder import find_classes
+from .lib_finder import find_libs
+from .comment_finder import find_comments
+from .id_finder import find_ids
 
 '''
 Base tokenizer class. Implement one yourself.
@@ -210,5 +214,59 @@ class ClassTokenizer(BaseTokenizer):
     def keys():
         return ['class']
 
-    # @staticmethod
-    # def tokenize(self, lines):
+    @staticmethod
+    def tokenize(lines, lang):
+        rv = {}
+        rv['class'] = find_classes(lines, lang=lang, verbose=0)
+        return rv
+
+
+class LibraryTokenizer(BaseTokenizer):
+    @staticmethod
+    def get_supported_filetypes():
+        return ['py', 'cpp', 'js', 'h', 'java']
+
+    @staticmethod
+    def keys():
+        return ['library']
+
+    @staticmethod
+    def tokenize(lines, lang):
+        rv = {}
+        rv['library'] = find_libs(lines, lang=lang)
+        return rv
+
+
+class CommentTokenizer(BaseTokenizer):
+    @staticmethod
+    def get_supported_filetypes():
+        return ['py', 'cpp', 'js', 'h', 'java']
+
+    @staticmethod
+    def keys():
+        return ['comment']
+
+    @staticmethod
+    def tokenize(lines, path, lang):
+        rv = {}
+        rv['comment'] = find_comments(lines, path=path, lang=lang)
+        return rv
+
+
+class IdLitOpTokenizer(BaseTokenizer):
+    @staticmethod
+    def get_supported_filetypes():
+        return ['py', 'cpp', 'js', 'h', 'java']
+
+    @staticmethod
+    def keys():
+        return ['identifier', 'literal', 'operator']
+
+    @staticmethod
+    def tokenize(lines, path, lang):
+        rv = {}
+        result = find_ids(lines, path=path, lang=lang)
+        rv['identifier'] = result[0]
+        rv['literal'] = result[3]
+        rv['operator'] = result[6]
+        return rv

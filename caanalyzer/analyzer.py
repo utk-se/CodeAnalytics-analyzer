@@ -35,8 +35,8 @@ import codecs
 from tqdm import tqdm
 from .util import TqdmToLogger
 import logging
-tqdm_out = TqdmToLogger(log, level=logging.INFO)
 
+tqdm_out = TqdmToLogger(log, level=logging.INFO)
 
 Num = Union[int, float]
 
@@ -50,17 +50,18 @@ ie, df.index_repo(), df.mean() versus repo.df.mean(), repo.index()
 
 class CodeRepo:
     # TODO: type annotate this
-    def __init__(self, input_path, languages=['.py', '.cpp', '.js', '.h', '.java']):
+    def __init__(self, input_path, languages=['.py', '.c', '.cpp', '.js', '.h', '.java']):
 
         self.df = pd.DataFrame()
         self.supported_filetypes = set(
-            ['.py', '.cpp', '.js', '.h', '.java']) & set(languages)
+            ['.py', '.c', '.cpp', '.js', '.h', '.java']) & set(languages)
 
         # make sure that specified languages are supported
         for extension in languages:
             if extension not in self.supported_filetypes:
                 raise UnsupportedLanguageException(
-                    '{} is not a supported file extension. Supported file extensions include {}'.format(extension, self.supported_filetypes))
+                    '{} is not a supported file extension. Supported file extensions include {}'.format(extension,
+                                                                                                        self.supported_filetypes))
 
         self.register_path(input_path, append=False)
 
@@ -138,7 +139,7 @@ class CodeRepo:
             return []
         elif not df.empty:
             return set(flatten_list(self.tokenizer_names)) - \
-                set(self.df.index.get_level_values('token_type').unique())
+                   set(self.df.index.get_level_values('token_type').unique())
         else:
             return flatten_list(self.tokenizer_names)
 
@@ -246,15 +247,17 @@ class CodeRepo:
                 log.warn('Previously indexed file {} not found.'.format(
                     input_path))
                 continue
-
+            '''
             with codecs.open(input_path, 'r', encoding='utf-8', errors='ignore') as fin:
                 # log.info('Reading {}'.format(input_path))
                 codestr_lines = fin.read().split('\n')
-
                 # Apply any new code parsers, don't calc new metrics yet
                 for tkzr in self.tokenizers:
+                    if tkzr.__name__ == 'ClassTokenizer':
+                        codestr_lines = [sub.replace('\r', '\n') for sub in codestr_lines]
+                        print(input_path)
                     out = tkzr.tokenize(codestr_lines, lang=lang)
-                    # log.info('Applying tokenizer(s): {}'.format(tkzr.keys()))
+                    log.info('Applying tokenizer(s): {}'.format(tkzr.keys()))
                     for k, v in out.items():
 
                         # apply existing metrics to the new rows
@@ -262,7 +265,9 @@ class CodeRepo:
                             line_start, line_end, char_start, char_end = tuple(
                                 row)
 
+                            #print(line_start, line_end)
                             substr = codestr_lines[line_start: line_end]
+                            #print(substr)
                             substr[0] = substr[0][char_start:]
                             substr[-1] = substr[-1][:char_end]
 
@@ -272,6 +277,67 @@ class CodeRepo:
                             combined_row = np.concatenate(
                                 (row, np.array(mv)))
                             df_dict[(lang, input_path, k, i)] = combined_row
+            '''
+            print(input_path)
+            for tkzr in self.tokenizers:
+                if tkzr.__name__ == 'ClassTokenizer' \
+                        or tkzr.__name__ == 'LibraryTokenizer' \
+                        or tkzr.__name__ == 'CommentTokenizer' \
+                        or tkzr.__name__ == 'IdentifierTokenizer' \
+                        or tkzr.__name__ == 'IdLitOpTokenizer':
+                    with open(input_path, 'r') as fin:
+                        # log.info('Reading {}'.format(input_path))
+                        codestr_lines = fin.readlines()
+                        # Apply any new code parsers, don't calc new metrics yet
+                        if tkzr.__name__ == 'CommentTokenizer' or tkzr.__name__ == 'IdLitOpTokenizer':
+                            out = tkzr.tokenize(codestr_lines, input_path, lang=lang)
+                        else:
+                            out = tkzr.tokenize(codestr_lines, lang=lang)
+                        log.info('Applying tokenizer(s): {}'.format(tkzr.keys()))
+                        for k, v in out.items():
+                            # apply existing metrics to the new rows
+                            for i, row in enumerate(v):
+                                line_start, line_end, char_start, char_end = tuple(
+                                    row)
+                                # print(codestr_lines)
+                                # print(line_start)
+                                # print(line_end)
+                                # print(char_start)
+                                # print(char_end)
+                                substr = codestr_lines[line_start: line_end + 1]
+                                # print(substr)
+                                substr[0] = substr[0][char_start:]
+                                substr[-1] = substr[-1][:char_end]
+
+                                mv = [mm(substr)
+                                      for mm in self.metrics.values()]
+
+                                combined_row = np.concatenate(
+                                    (row, np.array(mv)))
+                                df_dict[(lang, input_path, k, i)] = combined_row
+                else:
+                    with codecs.open(input_path, 'r', encoding='utf-8', errors='ignore') as fin:
+                        # log.info('Reading {}'.format(input_path))
+                        codestr_lines = fin.read().split('\n')
+                        # Apply any new code parsers, don't calc new metrics yet
+                        out = tkzr.tokenize(codestr_lines, lang=lang)
+                        log.info('Applying tokenizer(s): {}'.format(tkzr.keys()))
+                        for k, v in out.items():
+
+                            # apply existing metrics to the new rows
+                            for i, row in enumerate(v):
+                                line_start, line_end, char_start, char_end = tuple(
+                                    row)
+                                substr = codestr_lines[line_start: line_end]
+                                substr[0] = substr[0][char_start:]
+                                substr[-1] = substr[-1][:char_end]
+
+                                mv = [mm(substr)
+                                      for mm in self.metrics.values()]
+
+                                combined_row = np.concatenate(
+                                    (row, np.array(mv)))
+                                df_dict[(lang, input_path, k, i)] = combined_row
 
         log.info('Creating dataframe...')
 
