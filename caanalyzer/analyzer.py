@@ -62,6 +62,13 @@ class Repo:
         Maximum directory depth of the repo. (The top level is depth 0.)
     """
 
+    def _format_pattern(self, esc_path, pattern):
+        """Internal method.
+        """
+        if re.match(re.escape(ESC_SEP), pattern) != None:
+            return esc_path + pattern
+        return esc_path + ESC_SEP + pattern
+
     def _ignore(self, f, root, esc_path, ignore, negate):
         """Internal method.
         """
@@ -75,13 +82,6 @@ class Repo:
             and all(re.fullmatch(_format_pattern(esc_path, p),
                     root + os.sep + f) == None
                     for p in ignore)))
-
-    def _format_pattern(self, esc_path, pattern):
-        """Internal method.
-        """
-        if re.match(re.escape(ESC_SEP), pattern) != None:
-            return esc_path + pattern
-        return esc_path + ESC_SEP + pattern
 
     def __init__(self, input_path, ignorefile=None, tabsize=4):
         self.input_path = input_path
@@ -278,6 +278,11 @@ class File:
         self.num_lines = 0
         self.methods   = []
         self.classes   = []
+        self.libs      = []
+        self.comments  = []
+        self.ids       = []
+        self.literals  = []
+        self.operators = []
 
         try:
             analysis = lizard.analyze_file(file_path)
@@ -347,6 +352,11 @@ class File:
             "num_lines": self.num_lines,
             "methods": self.methods,
             "classes": self.classes,
+            "libs": self.libs,
+            "comments": self.comments,
+            "ids": self.ids,
+            "literals": self.literals,
+            "operators": self.operators,
             "num_tokens": self.num_tokens
         }
 

@@ -1,6 +1,5 @@
 import re
 from cadistributor import log
-from .exceptions import UnsupportedLanguageException
 
 
 def space_counter(string):  # counts num spaces before class keyword
@@ -116,6 +115,6 @@ def find_classes(content, lang, verbose=0):
                             break
 
     else:
-        raise UnsupportedLanguageException(lang + " not supported yet")
+        log.err(lang + " not supported yet")
 
     return class_tuples
