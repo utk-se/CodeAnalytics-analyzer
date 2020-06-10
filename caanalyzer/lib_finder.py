@@ -1,4 +1,4 @@
-#from cadistributor import log
+from cadistributor import log
 
 # format: line start, line end, offset start, offset end
 def find_libs(content, lang):
@@ -56,7 +56,6 @@ def find_libs(content, lang):
                 libs.append([x, x, 0, len(line)])
 
     else:
-        #log.error(lang + " not supported yet")
-        pass
+        log.error(lang + " not supported yet")
 
     return libs

@@ -1,5 +1,5 @@
 import re
-#from cadistributor import log
+from cadistributor import log
 
 c_plusplus_keywords = ['asm', 'else', 'new', 'this', 'auto', 'enum', 'operator', 'throw', 'bool', 'explicit',
                        'private', 'true', 'break', 'export', 'protected', 'try', 'case', 'extern', 'public', 'typedef',
@@ -106,8 +106,7 @@ def find_ids(content, path, lang, verbose=0):
                     try:
                         raw_op = re.search(r'.*op=(.*)\(\).*', each).group(1)
                     except AttributeError as e:
-                        #log.error(e)
-                        pass
+                        log.error(e)
                     found = False
                     rev_i = i - 1
                     while not found:
@@ -204,7 +203,7 @@ def find_ids(content, path, lang, verbose=0):
             return json.dumps(to_dict(node), **kwargs)
 
         if os.name == 'nt':
-            #log.error("THIS PART MAY NOT WORK SINCE IT'S ON WINDOWS")
+            log.error("THIS PART MAY NOT WORK SINCE IT'S ON WINDOWS")
             # ast = parse_file(os.getcwd() + "\\" + path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
             ast = parse_file(path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
         else:
@@ -301,7 +300,7 @@ def find_ids(content, path, lang, verbose=0):
                 try:
                     raw_op = re.search(r'.*\"op\"\: "(.*)".*', ast_line).group(1)
                 except AttributeError as e:
-                    #log.error(e)
+                    log.error(e)
                     pass
                 num_spaces = len(re.search("(.*)\"op.*", ast_line).group(1))
                 regex = r'.{' + str(num_spaces) + r'}\"coord\"\: \".*\".*'

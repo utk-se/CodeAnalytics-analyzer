@@ -1,5 +1,5 @@
 import re
-#from cadistributor import log
+from cadistributor import log
 
 def find_comments(content, path, lang):
     comments = []
@@ -66,7 +66,6 @@ def find_comments(content, path, lang):
                     comments.append([num, num, offset, len(line)])
 
     else:
-        #log.error(lang + " not supported yet")
-        pass
+        log.err(lang + " not supported yet")
 
     return comments

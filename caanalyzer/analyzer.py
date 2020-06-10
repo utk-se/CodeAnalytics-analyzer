@@ -25,7 +25,7 @@ from .class_finder import find_classes
 from .lib_finder import find_libs
 from .comment_finder import find_comments
 from .id_finder import find_ids
-#from cadistributor import log
+from cadistributor import log
 
 SUPPORTED_FILETYPES = ["c", "cpp", "h", "java", "js", "py"]
 """Extensions of supported filetypes (list of str)."""
@@ -239,8 +239,7 @@ class Repo:
                     json.dump(repo_obj, out, 0)
 
             except IOError: 
-                #log.err("Could not write to file: " + output_path)
-                pass
+                log.err("Could not write to file: " + output_path)
 
         return repo_obj
 
@@ -296,7 +295,7 @@ class File:
         except RecursionError:
             # Log the error, then raise it for the caller. This 
             # allows File to be used alone or as part of Repo.
-            #log.err("Error with lizard analysis.")
+            log.err("Error with lizard analysis.")
             raise RecursionError
 
         # --------------------------------------------------------
@@ -310,15 +309,15 @@ class File:
         try:
             # Analyze each line in the file
             with open(file_path) as f:
+                lines = f.readlines()
                 for index, line in enumerate(f):
                     self.num_lines += 1
 
                     line_obj = Line(index, line, tabsize)
                     self.line_objs.append(line_obj.export())
-                lines = f.readlines()
             
         except IOError:
-            #log.err("Could not read file: " + file_path)
+            log.err("Could not read file: " + file_path)
             raise IOError
 
         # --------------------------------------------------------
@@ -392,8 +391,7 @@ class File:
                     json.dump(file_obj, out, 0)
 
             except IOError: 
-                #log.err("Could not write to file: " + output_path)
-                pass
+                log.err("Could not write to file: " + output_path)
 
         return file_obj
 
@@ -471,7 +469,6 @@ class Line:
                     json.dump(line_obj, out, 0)
 
             except IOError: 
-                #log.err("Could not write to file: " + output_path)
-                pass
+                log.err("Could not write to file: " + output_path)
 
         return line_obj
