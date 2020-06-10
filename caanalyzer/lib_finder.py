@@ -4,7 +4,7 @@ from .exceptions import UnsupportedLanguageException
 # format: line start, line end, offset start, offset end
 def find_libs(content, lang):
     libs = []
-    if lang == '.py':
+    if lang == 'py':
         import astpretty
         import ast
         my_ast = ast.parse(''.join(content))
@@ -15,7 +15,7 @@ def find_libs(content, lang):
                 libs.append([my_ast.body[x].lineno - 1, my_ast.body[x].lineno - 1, 0,
                              len(content[my_ast.body[x].lineno - 1])])
 
-    elif lang == '.c' or lang == '.cpp' or lang == '.h':
+    elif lang == 'c' or lang == 'cpp' or lang == 'h':
         import re
         pattern = re.compile("#include(.*)")
         for x, line in enumerate(content):
@@ -24,7 +24,7 @@ def find_libs(content, lang):
                 # libs.append([res[1:-1], x])
                 libs.append([x, x, 0, len(line)])
 
-    elif lang == '.java':
+    elif lang == 'java':
         import re
         for x, line in enumerate(content):
             if line.strip().startswith("import"):
@@ -34,7 +34,7 @@ def find_libs(content, lang):
                 # libs.append([lib_name, x])
                 libs.append([x, x, 0, len(line)])
 
-    elif lang == '.js':
+    elif lang == 'js':
         import re
         pattern1 = re.compile("import(.*)from(.*);")
         pattern2 = re.compile("import(.*);")

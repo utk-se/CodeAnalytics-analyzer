@@ -14,14 +14,14 @@ def space_counter(string):  # counts num spaces before class keyword
 
 def find_classes(content, lang, verbose=0):
     class_tuples = []
-    if lang == '.py':
+    if lang == 'py':
         import ast
         my_ast = ast.parse(''.join(content))
         for each in my_ast.body:
             if type(each).__name__ == 'ClassDef':
                 class_tuples.append(tuple([each.lineno - 1, each.body[len(each.body)-1].lineno - 1, 0, 1]))
 
-    elif lang == '.js':
+    elif lang == 'js':
         import esprima
         items = list(esprima.tokenize(''.join(content), options={'loc': True}))
         l_brackets = 0
@@ -44,7 +44,7 @@ def find_classes(content, lang, verbose=0):
                         class_tuples.append(tuple([each.loc.start.line - 1, each2.loc.start.line - 1, 0, 1]))
                         break
 
-    elif lang == '.java':
+    elif lang == 'java':
         import javac_parser
         java = javac_parser.Java()
         l_brackets = 0
@@ -67,7 +67,7 @@ def find_classes(content, lang, verbose=0):
                         class_tuples.append(tuple([each[2][0] - 1, each2[2][0] - 1, 0, 1]))
                         break
 
-    elif lang == '.c' or lang == '.cpp' or lang == '.h':
+    elif lang == 'c' or lang == 'cpp' or lang == 'h':
         pattern = re.compile(r"\s*(class|struct)\s\w*\s*{?\n")
         pattern2 = re.compile(r"\s*(class|struct)\s\w*\n")
         pattern3 = re.compile(r"\s*{")

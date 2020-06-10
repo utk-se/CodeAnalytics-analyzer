@@ -8,7 +8,7 @@ class LangNotSupportedError(Exception):
 
 def find_comments(content, path, lang):
     comments = []
-    if lang == '.py':
+    if lang == 'py':
         import tokenize
         with open(path, 'rb') as f:
             tokens = tokenize.tokenize(f.readline)
@@ -24,7 +24,7 @@ def find_comments(content, path, lang):
     # comments format: [comment name, [start line, start offset], [end line, end offset]]
     #                                           OR
     #                  [comment name, line, offset]
-    elif lang == '.c' or lang == '.java' or lang == '.js' or lang == '.cpp' or lang == '.h':
+    elif lang == 'c' or lang == 'java' or lang == 'js' or lang == 'cpp' or lang == 'h':
         single_line = re.compile(
             r"^[^(\")]*((\")[^(\")]*(\")[^(\")]*)*\/\/")
         one_line_block = re.compile(

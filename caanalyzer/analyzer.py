@@ -21,6 +21,10 @@ import os
 import lizard
 import json
 import re
+from .class_finder import find_classes
+from .lib_finder import find_libs
+from .comment_finder import find_comments
+from .id_finder import find_ids
 from cadistributor import log
 
 SUPPORTED_FILETYPES = ["cpp", "h", "java", "js", "py"]
@@ -284,6 +288,8 @@ class File:
         self.literals  = []
         self.operators = []
 
+        lines = []
+
         try:
             analysis = lizard.analyze_file(file_path)
 
@@ -309,6 +315,7 @@ class File:
 
                     line_obj = Line(index, line, tabsize)
                     self.line_objs.append(line_obj.export())
+                lines = file.readlines()
             
         except IOError:
             log.err("Could not read file: " + file_path)
@@ -324,8 +331,27 @@ class File:
             self.methods.append(method)
 
         # --------------------------------------------------------
-        # TODO: Classes
+        # Classes
         # --------------------------------------------------------
+        self.classes = find_classes(lines, file_ext)
+
+        # --------------------------------------------------------
+        # Libraries
+        # --------------------------------------------------------
+        self.libs = find_libs(lines, file_ext)
+
+        # --------------------------------------------------------
+        # Comments
+        # --------------------------------------------------------
+        self.comments = find_comments(lines, file_path, file_ext)
+
+        # --------------------------------------------------------
+        # TODO: Identifiers, Literals, and Operators
+        # --------------------------------------------------------
+        ids = find_ids(lines, file_path, file_ext)
+        self.ids = ids[0]
+        self.literals = ids[3]
+        self.operators = ids[6]
 
     def export(self, output_path=None):
         """Output chosen analytics for the file.

@@ -28,7 +28,7 @@ def find_ids(content, path, lang, verbose=0):
     unique_lits = set()  # list of literals with starting line and starting position
     unique_ids = set()  # list of identifiers with starting line and starting position
 
-    if lang == '.py':
+    if lang == 'py':
         import astpretty
         import ast
         my_ast = ast.parse(''.join(content))
@@ -122,7 +122,7 @@ def find_ids(content, path, lang, verbose=0):
                             unique_ops.add(raw_op)
                         rev_i -= 1
 
-    elif lang == '.c':
+    elif lang == 'c':
         from pycparser import parse_file
         import json
         import sys
@@ -317,7 +317,7 @@ def find_ids(content, path, lang, verbose=0):
                             int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_op)])
                 unique_ops.add(raw_op)
 
-    elif lang == '.cpp':
+    elif lang == 'cpp':
         import subprocess
         import os
         # cwd = os.path.dirname(__file__)
@@ -376,7 +376,7 @@ def find_ids(content, path, lang, verbose=0):
                         unique_ids.add(raw_id)
 
     # format: [id/lit/op, [start line, end line], [start offset, end offset]]
-    elif lang == '.js':
+    elif lang == 'js':
         import esprima
         js_ops = ['=', '+=', '-=', '*=', '**=', '/=', '%=', '<<=', '>>=', '>>>=',
                   '&=', '|=', '^=', ',', '+', '-', '*', '**', '/', '%', '++', '--', '<<', '>>', '>>>', '&',
@@ -407,7 +407,7 @@ def find_ids(content, path, lang, verbose=0):
                 unique_lits.add(each.value)
 
     # format: [id/lit/op, [start line, end line], [start offset, end offset]]
-    elif lang == '.java':
+    elif lang == 'java':
         import javac_parser
         java_ops = ['+', '-', '*', '/', '%', '+', '--', '++', '=', '!', '==', '!=', '>', '>=', '<', '<=', '&&',
                     '||', '?:', 'instanceof', '~', '<<', '>>', '>>>', '&', '^', '|']
