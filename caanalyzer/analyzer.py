@@ -26,6 +26,9 @@ from cadistributor import log
 SUPPORTED_FILETYPES = ["cpp", "h", "java", "js", "py"]
 """Extensions of supported filetypes (list of str)."""
 
+ESC_SEP = re.escape(os.sep)
+"""Regex-escaped os separator."""
+
 class Repo:
     """Generates analytics for a code repository.
 
@@ -36,8 +39,7 @@ class Repo:
     ignorefile : str, optional
         Path to file specifying rules for excluding files from analysis.
         (None by default.) #TODO: Implement ignorefile.
-    debug : bool, optional
-        Enable debug messages. (False by deault.)
+
     tabsize : int, optional
         The number of spaces with which to represent a tab character. (4
         by default.)
@@ -60,54 +62,56 @@ class Repo:
         Maximum directory depth of the repo. (The top level is depth 0.)
     """
 
-    def __init__(self, input_path, ignorefile=None, debug=False,
-                 tabsize=4):
+    def _ignore(self, f, root, esc_path, ignore, negate):
+        """Internal method.
+        """
+        return not (any(re.fullmatch(p, f) != None
+                    for p in negate)
+            or any(re.fullmatch(_format_pattern(esc_path, p),
+                    root + os.sep + f) != None
+                    for p in negate)
+            or (all(re.fullmatch(p, f) == None
+                    for p in ignore)
+            and all(re.fullmatch(_format_pattern(esc_path, p),
+                    root + os.sep + f) == None
+                    for p in ignore)))
+
+    def _format_pattern(self, esc_path, pattern):
+        """Internal method.
+        """
+        if re.match(re.escape(ESC_SEP), pattern) != None:
+            return esc_path + pattern
+        return esc_path + ESC_SEP + pattern
+
+    def __init__(self, input_path, ignorefile=None, tabsize=4):
         self.input_path = input_path
         self.ignorefile = ignorefile
-        self.debug      = debug
         self.tabsize    = tabsize
 
         self.file_objs = []
-        self.file_exts  = set()
-        self.num_dirs   = 0
-        self.num_files  = 0
-        self.num_lines  = 0
-        self.max_depth  = 0
-
-        if debug:
-            log.debug("Repo instance created.")
-
-        '''
-        TODO: instead of storing info about each line, we can store
-        one obj w/ a 'median file' object, which has metrics including
-        line-by-line data that is based off the other files.
-        ? One for each lang? Potential issue: summing entire repo into 1 file
-        seems overly reductive.
-        median method
-        first most likely positions for method, second.
-        For each line, frequency of method declaration or body
-        For file-level data: record avgs
-        For line-level info - store frequency (ie, freq_newlines @ lineno x)
-        '''
+        self.file_exts = set()
+        self.num_dirs  = 0
+        self.num_files = 0
+        self.num_lines = 0
+        self.max_depth = 0
 
         # ----------------------------------------------------------------
         # Ignorefile
         # ----------------------------------------------------------------
         # Escaped os separator and path for use in ignorefile regex
-        esc_sep = "/" if os.sep == "/" else r"\\"
-        esc_path = re.sub(r"\\", r"\\\\", input_path)
+        esc_path = re.escape(input_path)
 
         # The following dictionary translates ignorefile expressions
         # into standard regular expressions for filtering files and dirs
         ignorefile_trans = {
             r"([^\\]|^)#.*" : "",
             r"^!.*" : "",
-            r"/" : esc_sep,
+            r"/" : ESC_SEP,
             r"\\#" : "#",
             r"\\!" : "!",
             r"\." : r"\.",
-            r"\?" : "[^/]{1}",
-            r"\*" : "[^/]*"
+            r"\?" : "[^{}]{}".format(ESC_SEP, r"{1}"),
+            r"\*" : "[^{}]*".format(ESC_SEP)
         }
         reg = re.compile(r'(%s)' % "|".join(ignorefile_trans.keys()))
 
@@ -125,7 +129,7 @@ class Repo:
                             [k for k in ignorefile_trans if 
                                 re.search(k, m.string[m.start():m.end()])
                             ][0]], line.lstrip()[1:]) for line in lines
-                            if re.fullmatch(r"!.*/.*", line))]
+                            if re.match(r"!", line))]
         
         neg_files = [l for l in (reg.sub(lambda m:
                         ignorefile_trans[
@@ -141,45 +145,32 @@ class Repo:
                             [k for k in ignorefile_trans if 
                                 re.search(k, m.string[m.start():m.end()])
                             ][0]], re.sub(r"/$", "", line))
-                        for line in lines) if l]
+                        for line in lines)
+                        if l]
 
         ig_files = [l for l in (reg.sub(lambda m:
                         ignorefile_trans[
                             [k for k in ignorefile_trans if 
                                 re.search(k, m.string[m.start():m.end()])
-                            ][0]], line.strip()) for line in lines
-                            if re.fullmatch(r".*[^/]", line))
-                            if l]
+                            ][0]], line.strip())
+                        for line in lines
+                        if re.fullmatch(r".*[^/]", line))
+                        if l]
 
         # Walk through each file, directory by directory.
         for root, dirs, files in os.walk(input_path):
             # Exclude files and directories specified in ignorefile
-            files   = [f for f in files if any(re.fullmatch(p, f) != None
-                                for p in neg_files)
-                            or any(re.fullmatch(esc_path + esc_sep + p,
-                                        root + os.sep + f) != None
-                                for p in neg_files)
-                            or all(re.fullmatch(p, f) == None
-                                for p in ig_files)
-                            or all(re.fullmatch(esc_path + esc_sep + p,
-                                        root + os.sep + f) == None
-                                for p in ig_files)]
-            dirs[:] = [d for d in dirs if any(re.fullmatch(p, d) != None
-                                for p in neg_dirs)
-                            or any (re.fullmatch(esc_path + esc_sep + p,
-                                        root + os.sep + d) != None
-                                for p in neg_files)
-                            or all(re.fullmatch(p, d) == None
-                                for p in ig_dirs)
-                            or all(re.fullmatch(esc_path + esc_sep + p,
-                                        root + os.sep + d) == None
-                                for p in ig_dirs)]
+            files   = [f for f in files if not self._ignore(f, root,
+                                        esc_path, ig_files, neg_files)]
+            dirs[:] = [d for d in dirs if not self._ignore(d, root,
+                                        esc_path, ig_dirs, neg_dirs)]
 
             # Update running max depth
             self.max_depth = max(self.max_depth, root.count(os.sep))
 
             # Tally directories
-            self.num_dirs += len(dirs)
+            self.num_dirs  += len(dirs)
+            self.num_files += len(files)
 
             for f in files:
                 file_path = os.path.join(root, f)
@@ -191,13 +182,10 @@ class Repo:
 
                 # Register file extension in the set of observed exts.
                 self.file_exts.add(file_ext)
-                self.num_files += 1
 
                 try:
                     file_obj = File(file_path, file_ext, tabsize)
                 except (RecursionError, IOError) as e:
-                    if debug:
-                        log.debug("Proceeding to next file.")
                     continue
 
                 # Add file analytics to repo analytics
@@ -209,34 +197,6 @@ class Repo:
         # ----------------------------------------------------------------
         # Adjust max depth, where the top level of the repo is depth 0
         self.max_depth -= input_path.count(os.sep)
-
-
-    # ====================================================================
-    # The name of the final version of this method (unless it gets
-    # incorporated elsewhere or thrown out) should be a verb. - Zack
-    def class_finder(self, file_object):
-        """TODO: Short documentation goes here.
-        
-        Extended documentation goes here.
-
-        Parameters
-        ------------------------------------------------------------------
-        file_object : type
-            Lorem ipsum dolor sit amet.
-
-        Returns
-        ------------------------------------------------------------------
-        type
-            Lorem ipsum dolor sit amet.
-        """
-        for line_num, line in enumerate(file_object):
-            pattern = re.compile("^\#.*class.*\:")
-            if line.contains(pattern):
-                num_white = line.count(' ')
-                for line2 in file_object[line_num:]:
-                    # check num whitespace before non commented line
-                    pass
-    # ====================================================================
 
     def export(self, output_path=None):
         """Output chosen analytics for the repo.
@@ -276,6 +236,7 @@ class Repo:
 
             except IOError: 
                 log.err("Could not write to file: " + output_path)
+                pass
 
         return repo_obj
 
@@ -342,7 +303,7 @@ class File:
                     self.num_lines += 1
 
                     line_obj = Line(index, line, tabsize)
-                    self.lines.append(line_obj.export())
+                    self.line_objs.append(line_obj.export())
             
         except IOError:
             log.err("Could not read file: " + file_path)
