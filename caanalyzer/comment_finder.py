@@ -1,10 +1,5 @@
 import re
-
-
-class LangNotSupportedError(Exception):
-    """Raised when user tries to parse an unsupported language"""
-    pass
-
+#from cadistributor import log
 
 def find_comments(content, path, lang):
     comments = []
@@ -71,6 +66,7 @@ def find_comments(content, path, lang):
                     comments.append([num, num, offset, len(line)])
 
     else:
-        raise LangNotSupportedError(lang + " not supported yet")
+        #log.error(lang + " not supported yet")
+        pass
 
     return comments

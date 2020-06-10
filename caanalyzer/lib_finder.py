@@ -1,5 +1,4 @@
-from .exceptions import UnsupportedLanguageException
-
+#from cadistributor import log
 
 # format: line start, line end, offset start, offset end
 def find_libs(content, lang):
@@ -57,6 +56,7 @@ def find_libs(content, lang):
                 libs.append([x, x, 0, len(line)])
 
     else:
-        raise UnsupportedLanguageException(lang + " not supported yet")
+        #log.error(lang + " not supported yet")
+        pass
 
     return libs
