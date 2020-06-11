@@ -98,6 +98,7 @@ class Repo:
         self.num_files = 0
         self.num_lines = 0
         self.max_depth = 0
+        self.avg_file_length = 0
 
         # ----------------------------------------------------------------
         # Ignorefile
@@ -221,7 +222,7 @@ class Repo:
             Serializable dictionary of chosen analytics.
         """
         if self.num_files > 0:
-            avg_file_length = self.num_lines / self.num_files
+            self.avg_file_length = self.num_lines / self.num_files
 
         repo_obj = {
             "file_objs" : self.file_objs,
@@ -230,7 +231,7 @@ class Repo:
             "num_files" : self.num_files,
             "num_lines" : self.num_lines,
             "max_depth" : self.max_depth,
-            "avg_file_length" : avg_file_length
+            "avg_file_length" : self.avg_file_length
         }
 
         if output_path:
@@ -275,17 +276,18 @@ class File:
     """
 
     def __init__(self, file_path, file_ext, tabsize=4):
-        self.file_path = file_path
-        self.file_ext  = file_ext
-        self.line_objs = []
-        self.num_lines = 0
-        self.methods   = []
-        self.classes   = []
-        self.libs      = []
-        self.comments  = []
-        self.ids       = []
-        self.literals  = []
-        self.operators = []
+        self.file_path  = file_path
+        self.file_ext   = file_ext
+        self.line_objs  = []
+        self.num_lines  = 0
+        self.methods    = []
+        self.parameters = []
+        self.classes    = []
+        self.libs       = []
+        self.comments   = []
+        self.ids        = []
+        self.literals   = []
+        self.operators  = []
 
         lines = []
 
@@ -310,9 +312,8 @@ class File:
             # Analyze each line in the file
             with open(file_path) as f:
                 lines = f.readlines()
+                self.num_lines = len(lines)
                 for index, line in enumerate(f):
-                    self.num_lines += 1
-
                     line_obj = Line(index, line, tabsize)
                     self.line_objs.append(line_obj.export())
             
@@ -321,12 +322,26 @@ class File:
             raise IOError
 
         # --------------------------------------------------------
-        # Methods
+        # Methods and Paramaters
         # --------------------------------------------------------
         for func in analysis.function_list:
-            method = (func.__dict__["start_line"],
-                        func.__dict__["end_line"])
-            
+            num_spaces = len(re.search('(\s*).*',
+                                       lines[func.__dict__["start_line"] - 1]).group(1))
+            method = (func.__dict__["start_line"] - 1,
+                        func.__dict__["end_line"] - 1,
+                      num_spaces, len(lines[func.__dict__["start_line"] - 1]))
+            # parameter format: (line num, offset, end offset)
+            if len(func.parameters) != 0:
+                num_params = len(func.parameters)
+                for param in range(num_params):
+                    func_name = func.name if '.' not in func.name else func.name.split('.')[len(func.name.split('.'))-1]
+                    param_offset = len(re.search('(.*'+func_name+'.*'+func.parameters[param]+').*',
+                                             lines[func.__dict__["start_line"] - 1]).group(1))
+                    param_offset -= len(func.parameters[param])
+                    parameter = (func.__dict__["start_line"] - 1,
+                                 param_offset,
+                                 param_offset + len(func.parameters[param]))
+                self.parameters.append(parameter)
             self.methods.append(method)
 
         # --------------------------------------------------------
@@ -376,6 +391,7 @@ class File:
             "line_objs": self.line_objs,
             "num_lines": self.num_lines,
             "methods": self.methods,
+            "parameters": self.parameters,
             "classes": self.classes,
             "libs": self.libs,
             "comments": self.comments,
