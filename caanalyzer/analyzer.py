@@ -25,7 +25,6 @@ from .class_finder import find_classes
 from .lib_finder import find_libs
 from .comment_finder import find_comments
 from .id_finder import find_ids
-from cadistributor import log
 
 SUPPORTED_FILETYPES = ["c", "cpp", "h", "java", "js", "py"]
 """Extensions of supported filetypes (list of str)."""

@@ -1,6 +1,15 @@
 from setuptools import setup, find_packages
 
-import caanalyzer as mainmodule
+#from caanalyzer import __version__ as moduleversion
+
+def get_version(rel_path):
+    with open(rel_path, 'r') as f:
+        for line in f.read().splitlines():
+            if line.startswith('__version__'):
+                delim = '"' if '"' in line else "'"
+                return line.split(delim)[1]
+        else:
+            raise RuntimeError("Unable to find version string.")
 
 with open("README.md", "r") as fh:
     long_description = fh.read()
