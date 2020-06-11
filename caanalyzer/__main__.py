@@ -1,17 +1,16 @@
+"""Analyzes the shape of code within the current directory."""
+
+# from bson.json_util import loads, dumps
 from cadistributor import log
-# from analyzer import Analyzer
-from .analyzer import CodeRepo
-from .tokens import MethodTokenizer, FileTokenizer, LineTokenizer
-from caanalyzer.metrics import width, height, num_tokens
+# from .analyzer import Repo
+from caanalyzer import analyzer
+import pprint
 
-
-def analyze(path):
-    repo = CodeRepo(path)
-    repo.index([FileTokenizer, LineTokenizer, MethodTokenizer], {
-               'size': len, 'width': width, 'height': height, 'num_tokens': num_tokens})
-    return repo.df
-
+def analyze(path, ignorefile=None):
+    repo = analyzer.Repo(path, ignorefile, True)
+    return repo.export()
 
 if __name__ == "__main__":
-    log.info("Running analyze on current directory.")
-    print(analyze('..').head())
+    log.info("Running analyzer")
+    pp = pprint.PrettyPrinter()
+    pp.pprint(analyze("..\.."))

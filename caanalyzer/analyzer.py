@@ -18,267 +18,472 @@ Notes
 """
 
 import os
-
 import lizard
-import numpy as np
-import pandas as pd
-from cadistributor import log
-from typing import Optional, Collection, Union
-from pandas.api.extensions import ExtensionDtype
-from .exceptions import UnsupportedLanguageException, MalformedDataFrameException
-from .util import get_file_extension, flatten_list, tokenizer_keys_to_instances
-from hashlib import md5
-from typing import List, Callable, Union, Tuple
-from pathlib import Path
 import json
-import codecs
-from tqdm import tqdm
-from .util import TqdmToLogger
-import logging
-tqdm_out = TqdmToLogger(log, level=logging.INFO)
+import re
+from .class_finder import find_classes
+from .lib_finder import find_libs
+from .comment_finder import find_comments
+from .id_finder import find_ids
 
+SUPPORTED_FILETYPES = ["c", "cpp", "h", "java", "js", "py"]
+"""Extensions of supported filetypes (list of str)."""
 
-Num = Union[int, float]
+ESC_SEP = re.escape(os.sep)
+"""Regex-escaped os separator."""
 
-'''
-Container for code repository.
-TODO: refactor to become pandas extension
-https://pandas.pydata.org/pandas-docs/stable/development/extending.html
-ie, df.index_repo(), df.mean() versus repo.df.mean(), repo.index()
-'''
+class Repo:
+    """Generates analytics for a code repository.
 
+    Parameters
+    ----------------------------------------------------------------------
+    input_path : str
+        Path to repository to analyse.
+    ignorefile : str, optional
+        Path to file specifying rules for excluding files from analysis.
+        (None by default.) #TODO: Implement ignorefile.
 
-class CodeRepo:
-    # TODO: type annotate this
-    def __init__(self, input_path, languages=['.py', '.cpp', '.js', '.h', '.java']):
+    tabsize : int, optional
+        The number of spaces with which to represent a tab character. (4
+        by default.)
+    
+    Attributes
+    ----------------------------------------------------------------------
+    file_objs : list of dict
+        List of dictionaries containing analytics for each file within
+        the repo.
+    file_exts : set of str
+        A set of each file extension appearing within the repo.
+    num_dirs : int
+        Total number of directories within the repo, excluding the 
+        top-level directory.
+    num_files : int
+        Total number of files within the repo.
+    num_lines : int
+        Total number of lines of code within the repo.
+    max_depth : int
+        Maximum directory depth of the repo. (The top level is depth 0.)
+    """
 
-        self.df = pd.DataFrame()
-        self.supported_filetypes = set(
-            ['.py', '.cpp', '.js', '.h', '.java']) & set(languages)
+    def _format_pattern(self, esc_path, pattern):
+        """Internal method.
+        """
+        if re.match(re.escape(ESC_SEP), pattern) != None:
+            return esc_path + pattern
+        return esc_path + ESC_SEP + pattern
 
-        # make sure that specified languages are supported
-        for extension in languages:
-            if extension not in self.supported_filetypes:
-                raise UnsupportedLanguageException(
-                    '{} is not a supported file extension. Supported file extensions include {}'.format(extension, self.supported_filetypes))
+    def _ignore(self, f, root, esc_path, ignore, negate):
+        """Internal method.
+        """
+        return not (any(re.fullmatch(p, f) != None
+                    for p in negate)
+            or any(re.fullmatch(self._format_pattern(esc_path, p),
+                    root + os.sep + f) != None
+                    for p in negate)
+            or (all(re.fullmatch(p, f) == None
+                    for p in ignore)
+            and all(re.fullmatch(self._format_pattern(esc_path, p),
+                    root + os.sep + f) == None
+                    for p in ignore)))
 
-        self.register_path(input_path, append=False)
+    def __init__(self, input_path, ignorefile=None, tabsize=4):
+        self.input_path = input_path
+        self.ignorefile = ignorefile
+        self.tabsize    = tabsize
 
-        self.default_columns = ['line_start', 'line_end', 'char_start',
-                                'char_end']
-
-        # get intersection of specified languages and existing languages
-        log.info('languages found: {}'.format(self.languages))
-        log.info('number of valid files found: {}'.format(len(self.file_paths)))
-
-        # TODO: robustness: check for malformed input dataframes
-        self.tokenizers = None
-        self.metrics = None
-        self.tokenizer_names = []
-        self.metric_names = []
-
-    '''
-    For now, only track one path at a time. The code is developed
-    in such a way that it should straightforward to track multiple.
-    Append = true: Collect stats and add files to index from a new repository
-    as well as old.
-    '''
-
-    def register_path(self, input_path, append=True):
-        self.file_paths = []
-        self.file_extensions = []
-        self.num_directories = 0
-        self.num_extensions = 0
-        self.max_depth = 0
+        self.file_objs = []
+        self.file_exts = set()
+        self.num_dirs  = 0
         self.num_files = 0
+        self.num_lines = 0
+        self.max_depth = 0
+        self.avg_file_length = 0
 
-        self.root_path = str(Path(input_path).absolute())
+        # ----------------------------------------------------------------
+        # Ignorefile
+        # ----------------------------------------------------------------
+        # Escaped os separator and path for use in ignorefile regex
+        esc_path = re.escape(input_path)
 
-        if not os.path.exists(input_path):
-            raise FileNotFoundError('{} does not exist'.format(input_path))
-        if not os.path.isdir(input_path):
-            raise NotADirectoryError(
-                'Provided path {} is not a directory'.format(input_path))
+        # The following dictionary translates ignorefile expressions
+        # into standard regular expressions for filtering files and dirs
+        ignorefile_trans = {
+            r"([^\\]|^)#.*" : "",
+            r"^!.*" : "",
+            r"/" : ESC_SEP,
+            r"\\#" : "#",
+            r"\\!" : "!",
+            r"\." : r"\.",
+            r"\?" : "[^{}]{}".format(ESC_SEP, r"{1}"),
+            r"\*" : "[^{}]*".format(ESC_SEP)
+        }
+        reg = re.compile(r'(%s)' % "|".join(ignorefile_trans.keys()))
 
-        # retrieve filenames and get directory metrics
-        depth = 0
-        file_extensions = set()
+        if ignorefile:
+            with open(ignorefile, "r") as f:
+                lines = [l for l in (line.strip() for line in f) if l]
+        else:
+            lines = []
 
-        for subdir, dirs, files in os.walk(input_path):
+        # Negated patterns (don't ignore files/dirs specified by these).
+        # TODO: Improve performance, and finish making it match gitignore
+        #  syntax. (Currently, leading '/' does nothing.)
+        neg_dirs  = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], line.lstrip()[1:]) for line in lines
+                            if re.match(r"!", line))]
+        
+        neg_files = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], line.lstrip()[1:]) for line in lines
+                            if re.fullmatch(r"!.*[^/]", line))]
 
-            # get num directories and num files
-            self.num_directories += len(dirs)
+        # Ignored patterns (ignore files/dirs specified by these).
+        # NOTE: Patterns with a / at the end match only directories
+        ig_dirs  = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], re.sub(r"/$", "", line))
+                        for line in lines)
+                        if l]
+
+        ig_files = [l for l in (reg.sub(lambda m:
+                        ignorefile_trans[
+                            [k for k in ignorefile_trans if 
+                                re.search(k, m.string[m.start():m.end()])
+                            ][0]], line.strip())
+                        for line in lines
+                        if re.fullmatch(r".*[^/]", line))
+                        if l]
+
+        # Walk through each file, directory by directory.
+        for root, dirs, files in os.walk(input_path):
+            # Exclude files and directories specified in ignorefile
+            files   = [f for f in files if not self._ignore(f, root,
+                                        esc_path, ig_files, neg_files)]
+            dirs[:] = [d for d in dirs if not self._ignore(d, root,
+                                        esc_path, ig_dirs, neg_dirs)]
+
+            # Update running max depth
+            self.max_depth = max(self.max_depth, root.count(os.sep))
+
+            # Tally directories
+            self.num_dirs  += len(dirs)
             self.num_files += len(files)
 
-            # get max depth
-            depth = subdir.count(os.sep)
-            if depth > self.max_depth:
-                self.max_depth = depth
+            for f in files:
+                file_path = os.path.join(root, f)
+                file_ext  = file_path.split('.')[-1]
 
-            for filep in files:
-                file_path = subdir + os.sep + filep
-                file_path = Path(file_path)
-
-                # get file extension
-                file_extension = file_path.suffix
-                file_extensions.add(file_extension)
-
-                if file_extension not in self.supported_filetypes:
+                # Ignore unsupported filetypes.
+                if file_ext not in SUPPORTED_FILETYPES:
                     continue
 
-                self.file_paths.append(str(file_path.absolute()))
-                self.file_extensions.append(file_extension)
+                # Register file extension in the set of observed exts.
+                self.file_exts.add(file_ext)
 
-        self.num_extensions = len(list(file_extensions))
-        self.languages = set(self.supported_filetypes) & file_extensions
-        self.indexed = False
+                try:
+                    file_obj = File(file_path, file_ext, tabsize)
+                except (RecursionError, IOError) as e:
+                    continue
 
-    def unprocessed_tokens(self):
-        if self.tokenizers is None:
-            return []
-        elif not df.empty:
-            return set(flatten_list(self.tokenizer_names)) - \
-                set(self.df.index.get_level_values('token_type').unique())
-        else:
-            return flatten_list(self.tokenizer_names)
+                # Add file analytics to repo analytics
+                self.num_lines += file_obj.num_lines
+                self.file_objs.append(file_obj.export())
 
-    '''
-    return metrics present in the index
-    '''
+        # ----------------------------------------------------------------
+        # Overall Repo Analytics
+        # ----------------------------------------------------------------
+        # Adjust max depth, where the top level of the repo is depth 0
+        self.max_depth -= input_path.count(os.sep)
 
-    def unprocessed_metrics(self):
-        if not self.metrics:
-            return []
-        elif not df.empty:
-            return set(self.metric_names) - set(self.df.columns)
-        else:
-            return self.metric_names
+    def export(self, output_path=None):
+        """Output chosen analytics for the repo.
 
-    '''
-    return files that have been indexed
-    '''
+        TODO: Implement options to exclude certain analytics. (Hence, 
+        "chosen analytics".)
 
-    def unprocessed_files(self):
-        if not df.empty:
-            return set(self.file_paths) - set(
-                self.df.index.get_level_values('file_path').unique())
-        else:
-            return self.file_paths
+        Parameters
+        ------------------------------------------------------------------
+        output_path : str, optional
+            Path at which to output analytics json. (None by default. In
+            this case, it still returns a dictionary but does not write to
+            a file.)
 
-    '''
-    Retrieve previously processed filenames.
-    if intersection=True, return only filenames that exist
-    within the scope of the current repository
-    '''
+        Returns
+        ------------------------------------------------------------------
+        dict
+            Serializable dictionary of chosen analytics.
+        """
+        if self.num_files > 0:
+            self.avg_file_length = self.num_lines / self.num_files
 
-    def processed_files(self, intersection=False):
-        if self.df.empty:
-            return []
-        elif intersection:
-            return set(self.file_paths) & set(
-                self.df.index.get_level_values('file_path').unique())
-        else:
-            return self.df.index.get_level_values('file_path').unique()
+        repo_obj = {
+            "file_objs" : self.file_objs,
+            "file_exts" : self.file_exts,
+            "num_dirs"  : self.num_dirs,
+            "num_files" : self.num_files,
+            "num_lines" : self.num_lines,
+            "max_depth" : self.max_depth,
+            "avg_file_length" : self.avg_file_length
+        }
 
-    def processed_metrics(self, intersection=False):
-        if self.df.empty:
-            return []
-        elif intersection:
-            return set(
-                self.df.columns) & set(self.metric_names)
-        else:
-            return list(self.df.columns)
+        if output_path:
+            try:
+                with open(output_path, 'w') as out:
+                    json.dump(repo_obj, out, 0)
 
-    '''
-    TODO: implement
-    Indexes a new tokenizer and appends the results to an existing table
-    '''
+            except IOError: 
+                log.err("Could not write to file: " + output_path)
 
-    def add_tokenizers(self, tokenizers):
-        raise NotImplementedError
+        return repo_obj
 
-    '''
-    TODO: implement
-    Indexes a new metric and appends the results to an existing table
-    '''
+class File:
+    """Stores analytics for a file.
 
-    def add_metrics(self, metrics):
-        raise NotImplementedError
+    Parameters
+    ----------------------------------------------------------------------
+    file_path : str
+        The path to the file.
+    file_ext : str
+        The file extension.
 
-    '''
-    return true if a repository has been indexed
-    '''
+    Attributes
+    ----------------------------------------------------------------------
+    file_path : str
+        The path to the file.
+    file_ext : str
+        The file extension.
+    line_objs : list of dict
+        List of dictionaries containing analytics for each line of code
+        within the file.
+    num_lines : int
+        Total number of lines of code within the file.
+    methods : list of pair
+        List of pairs containing the indices of the first and last lines
+        of methods within the file.
+    classes : list of pair
+        List of pairs containing the indices of the first and last lines
+        of classes within the file.
+    num_tokens : int
+        Total number of code tokens within the file.
+    """
 
-    def indexed(self):
-        return self.indexed
+    def __init__(self, file_path, file_ext, tabsize=4):
+        self.file_path  = file_path
+        self.file_ext   = file_ext
+        self.line_objs  = []
+        self.num_lines  = 0
+        self.methods    = []
+        self.parameters = []
+        self.classes    = []
+        self.libs       = []
+        self.comments   = []
+        self.ids        = []
+        self.literals   = []
+        self.operators  = []
 
-    '''
-    Index the code repository into a dataframe for metric gathering
-    For each file, and each type of token
-    retrieve the start and end indices for this
-    if you want to join info for multiple repos, index multiple repos and perform a pandas join
-    '''
+        lines = []
 
-    def index(self, tokenizers, metrics={}):
-        if self.indexed:
-            return
+        try:
+            analysis = lizard.analyze_file(file_path)
 
-        # TODO: verify language support from tokenizers
-        self.tokenizers = tokenizers
-        self.metrics = metrics
+        except RecursionError:
+            # Log the error, then raise it for the caller. This 
+            # allows File to be used alone or as part of Repo.
+            log.err("Error with lizard analysis.")
+            raise RecursionError
 
-        log.info('Indexing this repository...')
+        # --------------------------------------------------------
+        # Tokens
+        # --------------------------------------------------------
+        self.num_tokens = analysis.token_count
 
-        self.tokenizer_names = []
-        for tokenizer in self.tokenizers:
-            self.tokenizer_names.append(tokenizer.keys())
+        # --------------------------------------------------------
+        # Lines
+        # --------------------------------------------------------
+        try:
+            # Analyze each line in the file
+            with open(file_path) as f:
+                lines = f.readlines()
+                self.num_lines = len(lines)
+                for index, line in enumerate(f):
+                    line_obj = Line(index, line, tabsize)
+                    self.line_objs.append(line_obj.export())
+            
+        except IOError:
+            log.err("Could not read file: " + file_path)
+            raise IOError
 
-        self.metric_names = list(self.metrics.keys())
+        # --------------------------------------------------------
+        # Methods and Paramaters
+        # --------------------------------------------------------
+        for func in analysis.function_list:
+            num_spaces = len(re.search('(\s*).*',
+                                       lines[func.__dict__["start_line"] - 1]).group(1))
+            method = (func.__dict__["start_line"] - 1,
+                        func.__dict__["end_line"] - 1,
+                      num_spaces, len(lines[func.__dict__["start_line"] - 1]))
+            # parameter format: (line num, offset, end offset)
+            if len(func.parameters) != 0:
+                num_params = len(func.parameters)
+                for param in range(num_params):
+                    func_name = func.name if '.' not in func.name else func.name.split('.')[len(func.name.split('.'))-1]
+                    param_offset = len(re.search('(.*'+func_name+'.*'+func.parameters[param]+').*',
+                                             lines[func.__dict__["start_line"] - 1]).group(1))
+                    param_offset -= len(func.parameters[param])
+                    parameter = (func.__dict__["start_line"] - 1,
+                                 param_offset,
+                                 param_offset + len(func.parameters[param]))
+                self.parameters.append(parameter)
+            self.methods.append(method)
 
-        # if we have existing files, process these first with
-        # the updated metrics
-        df_dict = {}
+        # --------------------------------------------------------
+        # Classes
+        # --------------------------------------------------------
+        self.classes = find_classes(lines, file_ext)
 
-        for input_path, lang in tqdm(zip(list(self.file_paths), self.file_extensions), total=len(self.file_paths)):
+        # --------------------------------------------------------
+        # Libraries
+        # --------------------------------------------------------
+        self.libs = find_libs(lines, file_ext)
 
-            # check that the file exists
-            if not os.path.exists(input_path):
-                log.warn('Previously indexed file {} not found.'.format(
-                    input_path))
-                continue
+        # --------------------------------------------------------
+        # Comments
+        # --------------------------------------------------------
+        self.comments = find_comments(lines, file_path, file_ext)
 
-            with codecs.open(input_path, 'r', encoding='utf-8', errors='ignore') as fin:
-                # log.info('Reading {}'.format(input_path))
-                codestr_lines = fin.read().split('\n')
+        # --------------------------------------------------------
+        # Identifiers, Literals, and Operators
+        # --------------------------------------------------------
+        ids = find_ids(lines, file_path, file_ext)
+        self.ids = ids[0]
+        self.literals = ids[3]
+        self.operators = ids[6]
 
-                # Apply any new code parsers, don't calc new metrics yet
-                for tkzr in self.tokenizers:
-                    out = tkzr.tokenize(codestr_lines, lang=lang)
-                    # log.info('Applying tokenizer(s): {}'.format(tkzr.keys()))
-                    for k, v in out.items():
+    def export(self, output_path=None):
+        """Output chosen analytics for the file.
 
-                        # apply existing metrics to the new rows
-                        for i, row in enumerate(v):
-                            line_start, line_end, char_start, char_end = tuple(
-                                row)
+        TODO: Implement options to exclude certain analytics. (Hence, 
+        "chosen analytics".)
 
-                            substr = codestr_lines[line_start: line_end]
-                            substr[0] = substr[0][char_start:]
-                            substr[-1] = substr[-1][:char_end]
+        Parameters
+        ------------------------------------------------------------------
+        output_path : str, optional
+            Path at which to output analytics json. (None by default. In
+            this case, it still returns a dictionary but does not write to
+            a file.)
+        
+        Returns
+        ------------------------------------------------------------------
+        dict
+            Serializable dictionary of chosen analytics.
+        """
+        file_obj = {
+            "file_path": self.file_path,
+            "file_ext": self.file_ext,
+            "line_objs": self.line_objs,
+            "num_lines": self.num_lines,
+            "methods": self.methods,
+            "parameters": self.parameters,
+            "classes": self.classes,
+            "libs": self.libs,
+            "comments": self.comments,
+            "ids": self.ids,
+            "literals": self.literals,
+            "operators": self.operators,
+            "num_tokens": self.num_tokens
+        }
 
-                            mv = [mm(substr)
-                                  for mm in self.metrics.values()]
+        if output_path:
+            try:
+                with open(output_path, 'w') as out:
+                    json.dump(file_obj, out, 0)
 
-                            combined_row = np.concatenate(
-                                (row, np.array(mv)))
-                            df_dict[(lang, input_path, k, i)] = combined_row
+            except IOError: 
+                log.err("Could not write to file: " + output_path)
 
-        log.info('Creating dataframe...')
+        return file_obj
 
-        mi = pd.MultiIndex.from_tuples(
-            df_dict.keys(), names=['lang', 'file_path', 'token_type', 'id'])
+class Line:
+    """Stores analytics for a line.
+    
+    Parameters
+    ----------------------------------------------------------------------
+    index : int
+        The index of the line within the file.
+    line  : str
+        The contents of the line
+    tabsize : int, optional
+        The number of spaces with which to represent a tab character. (4
+        by default.)
 
-        self.df = pd.DataFrame(
-            df_dict, columns=mi, index=self.default_columns + self.metric_names).T
+    Attributes
+    ----------------------------------------------------------------------
+    index : int
+        The index of the line within the file.
+    start : int
+        The index of the first non-whitespace character within the line.
+    end : int
+        The index of the last non-whitespace character within the line.
+    length : int
+        The number of characters in the line (with tabs expanded).
+    num_tabs : int
+        The number of tab characters in the line.
+    num_spaces : int
+        The number of space characters in the line.
+    """
 
-        log.info('Repository {} indexed for analysis'.format(self.root_path))
+    def __init__(self, index, line, tabsize=4):
+        self.index = index
+
+        self.num_tabs   = line.count('\t')
+        self.num_spaces = line.count(' ')
+
+        line = line.expandtabs(tabsize)
+
+        self.length = len(line)
+        self.start  = self.length - len(line.lstrip())
+        self.end    = len(line.rstrip()) - 1
+
+    def export(self, output_path=None):
+        """Output chosen analytics for the line.
+        
+        TODO: Implement options to exclude certain analytics. (Hence, 
+        "chosen analytics".)
+
+        Parameters
+        ------------------------------------------------------------------
+        output_path : str, optional
+            Path at which to output analytics json. (None by default. In
+            this case, it still returns a dictionary but does not write to
+            a file.)
+
+        Returns
+        ------------------------------------------------------------------
+        dict
+            Serializable dictionary of chosen analytics.
+        """
+        line_obj = {
+            "index": self.index,
+            "start": self.start,
+            "end": self.end,
+            "length": self.length,
+            "num_tabs": self.num_tabs,
+            "num_spaces": self.num_spaces
+        }
+
+        if output_path:
+            try:
+                with open(output_path, 'w') as out:
+                    json.dump(line_obj, out, 0)
+
+            except IOError: 
+                log.err("Could not write to file: " + output_path)
+
+        return line_obj
