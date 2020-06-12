@@ -5,7 +5,6 @@ language: python
 jobs:
   include:
   - os: linux
-    sudo: false
     script:
       - python3 setup.py install
       - python3 -m caanalyzer
