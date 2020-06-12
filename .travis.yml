@@ -8,5 +8,6 @@ jobs:
     sudo: false
     script:
       - python3 setup.py install
+      - python3 -m caanalyzer
       - python3 -c 'import caanalyzer ; caanalyzer.analyze(".")'
 
