@@ -13,4 +13,4 @@ def analyze(path, ignorefile=None):
 if __name__ == "__main__":
     log.info("Running analyzer")
     pp = pprint.PrettyPrinter()
-    pp.pprint(analyze("..\.."))
+    pp.pprint(analyze("."))
