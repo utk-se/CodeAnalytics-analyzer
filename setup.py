@@ -17,7 +17,7 @@ with open("README.md", "r") as fh:
 setup(
     name="CAanalyzer",
     version=get_version('caanalyzer/__init__.py'),
-    author="Aiden Rutter/Julian Ball/Jonathan Brya/Zack Strickland",
+    author="Aiden Rutter/Julian Ball/Jonathan Bryan/Zack Strickland",
     author_email="azh@utk.edu",
     description="To be used in combination with codeanalytics aggregator",
     long_description=long_description,
