@@ -16,7 +16,7 @@ with open("README.md", "r") as fh:
 
 setup(
     name="CAanalyzer",
-    version=mainmodule.__version__,
+    version=get_version('caanalyzer/__init__.py'),
     author="Aiden Rutter/Julian Ball/Jonathan Brya/Zack Strickland",
     author_email="azh@utk.edu",
     description="To be used in combination with codeanalytics aggregator",
@@ -26,7 +26,8 @@ setup(
     packages=find_packages(),
     install_requires=[
         "lizard>=1.17.3",
-        "ca-distributor @ git+ssh://git@github.com/utk-se/CodeAnalytics-distributor.git#egg=ca-distributor-0.1"
+        "astpretty",
+        # "ca-distributor @ git+ssh://git@github.com/utk-se/CodeAnalytics-distributor.git#egg=ca-distributor"
     ],
     classifiers=[
         "Programming Language :: Python :: 3",
