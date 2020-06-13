@@ -27,6 +27,8 @@ setup(
     install_requires=[
         "lizard>=1.17.3",
         "astpretty",
+        "esprima",
+        "javac_parser",
         # "ca-distributor @ git+ssh://git@github.com/utk-se/CodeAnalytics-distributor.git#egg=ca-distributor"
     ],
     classifiers=[
