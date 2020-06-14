@@ -325,7 +325,7 @@ class File:
         # Methods and Paramaters
         # --------------------------------------------------------
         for func in analysis.function_list:
-            num_spaces = len(re.search('(\s*).*',
+            num_spaces = len(re.search(r'(\s*).*',
                                        lines[func.__dict__["start_line"] - 1]).group(1))
             method = (func.__dict__["start_line"] - 1,
                         func.__dict__["end_line"] - 1,
@@ -335,8 +335,9 @@ class File:
                 num_params = len(func.parameters)
                 for param in range(num_params):
                     func_name = func.name if '.' not in func.name else func.name.split('.')[len(func.name.split('.'))-1]
-                    param_offset = len(re.search('(.*'+func_name+'.*'+func.parameters[param]+').*',
-                                             lines[func.__dict__["start_line"] - 1]).group(1))
+                    reg_string = r'(.*' + func_name.encode('unicode_escape').decode() + r'.*' + \
+                                 func.parameters[param].encode('unicode_escape').decode() + r').*'
+                    param_offset = len(re.search(reg_string, lines[func.__dict__["start_line"] - 1]).group(1))
                     param_offset -= len(func.parameters[param])
                     parameter = (func.__dict__["start_line"] - 1,
                                  param_offset,
