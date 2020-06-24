@@ -1,18 +1,41 @@
-from cadistributor import log
-
 # format: line start, line end, offset start, offset end
-def find_libs(content, lang):
+def find_libs(content, path, lang, py2=0):
+    if not py2:
+        from cadistributor import log
+    else:
+        content = open(path).readlines()
+        content = [line[:-2]+'\n' for line in content if line.endswith('\r\n')]
     libs = []
     if lang == 'py':
         import astpretty
         import ast
-        my_ast = ast.parse(''.join(content))
-        for x in range(len(my_ast.body)):
-            ast_piece = astpretty.pformat(my_ast.body[x])
-            if ast_piece.startswith("Import"):
-                # libs.append([my_ast.body[x].names[0].name, my_ast.body[x].lineno, my_ast.body[x].col_offset])
-                libs.append([my_ast.body[x].lineno - 1, my_ast.body[x].lineno - 1, 0,
-                             len(content[my_ast.body[x].lineno - 1])])
+        try:
+            my_ast = ast.parse(''.join(content))
+        except SyntaxError:
+            # PYTHON 2
+            if py2:  # getting in here means python2 still gives syntax errors
+                return []
+            import subprocess
+            import os
+            python2_name = 'python2'
+            process = subprocess.check_output([python2_name,  # python2 may not be the command on your machine
+                                               os.path.abspath(__file__),
+                                               ''.join(content), path, 'py', '1'])
+            p_result = eval(process.decode())
+
+            return p_result
+
+        def lib_recurse(body):
+            for x in range(len(body)):
+                ast_piece = astpretty.pformat(body[x])
+                if ast_piece.startswith("Import"):
+                    # libs.append([my_ast.body[x].names[0].name, my_ast.body[x].lineno, my_ast.body[x].col_offset])
+                    libs.append([body[x].lineno - 1, body[x].lineno - 1,
+                                 body[x].col_offset, len(content[body[x].lineno - 1])])
+                if 'body' in dir(body[x]):
+                    lib_recurse(body[x].body)
+
+        lib_recurse(my_ast.body)
 
     elif lang == 'c' or lang == 'cpp' or lang == 'h':
         import re
@@ -59,3 +82,9 @@ def find_libs(content, lang):
         log.error(lang + " not supported yet")
 
     return libs
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.append('..')
+    print(find_libs(content=sys.argv[1], path=sys.argv[2], lang=sys.argv[3], py2=int(sys.argv[4])))

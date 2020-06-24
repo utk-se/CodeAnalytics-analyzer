@@ -1,5 +1,5 @@
 import re
-from cadistributor import log
+
 
 c_plusplus_keywords = ['asm', 'else', 'new', 'this', 'auto', 'enum', 'operator', 'throw', 'bool', 'explicit',
                        'private', 'true', 'break', 'export', 'protected', 'try', 'case', 'extern', 'public', 'typedef',
@@ -17,7 +17,17 @@ c_plusplus_ops = ['equal', 'plus', 'minus', 'star', 'slash', 'percent', 'amp', '
                   'exclaim']
 
 
-def find_ids(content, path, lang, verbose=0):
+def fullmatch(regex, string, flags=0):
+    """Emulate python-3.4 re.fullmatch()."""
+    return re.match("(?:" + regex + r")\Z", string, flags=flags)
+
+
+def find_ids(content, path, lang, verbose=0, py2=0):
+    if not py2:
+        from cadistributor import log
+    else:
+        content = open(path).readlines()
+        content = [line[:-2]+'\n' for line in content if line.endswith('\r\n')]
     id_counter = 0
     op_counter = 0
     lit_counter = 0
@@ -31,15 +41,28 @@ def find_ids(content, path, lang, verbose=0):
     if lang == 'py':
         import astpretty
         import ast
-        my_ast = ast.parse(''.join(content))
-        pattern = re.compile(r".*op=.*\(\),.*")
-        pattern2 = re.compile(r".*Num\(.*\).*")
-        pattern3 = re.compile(r".*Str\(.*\).*")
-        pattern4 = re.compile(r".*Name\(.*\).*")
+        try:
+            my_ast = ast.parse(''.join(content))
+        except SyntaxError:
+            # PYTHON 2
+            if py2:
+                return tuple()
+            import subprocess
+            import os
+            import json
+            python2_name = 'python2'
+            process = subprocess.check_output([python2_name,  # python2 may not be the command on your machine
+                                               os.path.abspath(__file__),
+                                               ''.join(content), path, 'py', '0', '1'])
+            p_result = eval(process.decode())
+            return p_result
+
+        # pattern = re.compile(r".*op=.*\(\),.*")
+        # pattern2 = re.compile(r".*Num\(.*\).*")
+        # pattern3 = re.compile(r".*Str\(.*\).*")
+        # pattern4 = re.compile(r".*Name\(.*\).*")
         for x in range(len(my_ast.body)):
             ast_piece = astpretty.pformat(my_ast.body[x])
-            # print(ast_piece)
-            # print('#################')
             ast_piece_split = ast_piece.split('\n')
             if 'Assign(' in ast_piece:
                 for i, each in enumerate(ast_piece_split):
@@ -53,7 +76,8 @@ def find_ids(content, path, lang, verbose=0):
                                     int(ast_piece_split[i+2].strip()[11:len(ast_piece_split[i+2].strip()) - 1]) + 1])
                         unique_ops.add('=')
             for i, each in enumerate(ast_piece_split):
-                if bool(re.fullmatch(pattern4, each)):
+                # if bool(fullmatch(pattern4, each)):
+                if bool(fullmatch(r".*Name\(.*\).*", each)):
                     id_counter += 1
                     info = re.search(r".*Name\((.*)\).*", each).group(1)
                     info = info.split()
@@ -63,7 +87,8 @@ def find_ids(content, path, lang, verbose=0):
                                 int(info[1][11:len(info[1]) - 1]),
                                 int(info[1][11:len(info[1]) - 1]) + len(info[2][4:len(info[2]) - 2])])
                     unique_ids.add(info[2][4:len(info[2]) - 2])
-                if bool(re.fullmatch(pattern2, each)):
+                # if bool(fullmatch(pattern2, each)):
+                if bool(fullmatch(r".*Num\(.*\).*", each)):
                     lit_counter += 1
                     info = re.search(r".*Num\((.*)\).*", each).group(1)
                     info = info.split(', ')
@@ -73,23 +98,15 @@ def find_ids(content, path, lang, verbose=0):
                                  int(info[1][11:]),
                                  int(info[1][11:]) + len(info[2][2:])])
                     unique_lits.add(info[2][2:])
-                if bool(re.fullmatch(pattern3, each)):
+                # if bool(fullmatch(pattern3, each)):
+                if bool(fullmatch(r".*Str\(.*\).*", each)):
                     info = re.search(r".*Str\((.*)\).*", each).group(1)
-                    # print(info)
                     info_split = []
                     info_split.append(re.search("lineno=(\d+), col_offset=\-?\d+, s=.*", info).group(1))
                     info_split.append(re.search("lineno=\d+, col_offset=(\-?\d+), s=.*", info).group(1))
                     info_split.append(re.search("lineno=\d+, col_offset=\-?\d+, s=(\"|\')(.*)(\"|\')", info).group(2))
-                    # print(info_split)
-                    # print('##############')
                     # info = re.split("(, (?=(?:[^\']*\'[^\']*\')*[^\']*$))|(, (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$))", info)
                     # lits.append([info[2][3:len(info[2]) - 1], info[0][7:], info[1][11:]])
-                    # print(info)
-                    # print('##############')
-                    # print(info[0][7:])
-                    # print(info[1][11:])
-                    # print(info[2][3:len(info[2]) - 1])
-                    # print('##############')
                     # lits.append([int(info[0][7:]),
                     #              int(info[0][7:]),
                     #              int(info[1][11:]),
@@ -99,7 +116,8 @@ def find_ids(content, path, lang, verbose=0):
                                 int(info_split[1]),
                                 int(info_split[1]) + len(info_split[2]) - 1])
                     unique_lits.add(info[2][3:len(info[2]) - 1])
-                if bool(re.fullmatch(pattern, each)):
+                # if bool(fullmatch(pattern, each)):
+                if bool(fullmatch(r".*op=.*\(\),.*", each)):
                     op_counter += 1
                     num_spaces = len(re.search("(.*)op=.*", each).group(1))
                     raw_op = ''
@@ -110,7 +128,7 @@ def find_ids(content, path, lang, verbose=0):
                     found = False
                     rev_i = i - 1
                     while not found:
-                        if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}col_offset=.*', ast_piece_split[rev_i])):
+                        if bool(fullmatch(r'\s{' + str(num_spaces) + r'}col_offset=.*', ast_piece_split[rev_i])):
                             found = True
                             # ops.append([raw_op,
                             #             ast_piece_split[rev_i - 1].strip()[7:len(ast_piece_split[rev_i - 1].strip()) - 1],
@@ -465,3 +483,10 @@ def find_ids(content, path, lang, verbose=0):
     # return all above in a tuple in the same order printed above without unique count since
     # it can be obtained by calling len()
     return tuple([ids, unique_ids, id_counter, lits, unique_lits, lit_counter, ops, unique_ops, op_counter])
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.append('..')
+    print(find_ids(content=sys.argv[1], path=sys.argv[2], lang=sys.argv[3],
+                   verbose=int(sys.argv[4]), py2=int(sys.argv[5])))

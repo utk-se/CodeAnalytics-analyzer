@@ -325,10 +325,8 @@ class File:
         # Methods and Paramaters
         # --------------------------------------------------------
         for func in analysis.function_list:
-            num_spaces = len(re.search(r'(\s*).*',
-                                       lines[func.__dict__["start_line"] - 1]).group(1))
-            method = (func.__dict__["start_line"] - 1,
-                        func.__dict__["end_line"] - 1,
+            num_spaces = len(re.search(r'(\s*).*', lines[func.__dict__["start_line"] - 1]).group(1))
+            method = (func.__dict__["start_line"] - 1, func.__dict__["end_line"] - 1,
                       num_spaces, len(lines[func.__dict__["start_line"] - 1]))
             # parameter format: (line num, offset, end offset)
             if len(func.parameters) != 0:
