@@ -348,15 +348,23 @@ class File:
                       lead_wspace, length)
             self.methods.append(method)
             
-            # parameter format: (line num, offset, end offset)          
+            # parameter format: (line num, offset, end offset)
+            i = start_index          
             for param in func.full_parameters:
-                p = "\s*".join(param.split())
+                p = "\s*".join(re.escape(param).split('\ '))
 
                 # Match and determine span of parameter in line
                 # TODO: Consider function declaration spanning multiple lines.
                 #  We may need to patch lizard to allow for this.
-                offset = re.search(r"\((.+,\s*)*({})\s*([,:=].*|\))".format(p),
-                                     lines[start_index]).span(2)
+                m = re.compile(r"\(?(.+,\s*)*({})\s*([,:=].*|\))".format(p))
+                while True:
+                    match = m.search(lines[i])
+                    if match is None:
+                        i += 1
+                    else:
+                        break
+
+                offset = match.span(2)
                 parameter = (start_index, offset[0], offset[1]-1)
                 self.parameters.append(parameter)
 
@@ -368,7 +376,7 @@ class File:
         # ----------------------------------------------------------------
         # Libraries
         # ----------------------------------------------------------------
-        self.libs = find_libs(lines, file_ext)
+        self.libs = find_libs(lines, file_path, file_ext)
 
         # ----------------------------------------------------------------
         # Comments
