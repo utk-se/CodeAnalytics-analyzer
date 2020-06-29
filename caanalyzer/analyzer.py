@@ -42,8 +42,7 @@ class Repo:
         Path to repository to analyse.
     ignorefile : str, optional
         Path to file specifying rules for excluding files from analysis.
-        (None by default.) #TODO: Implement ignorefile.
-
+        (None by default.)
     tabsize : int, optional
         The number of spaces with which to represent a tab character. (4
         by default.)
@@ -64,6 +63,8 @@ class Repo:
         Total number of lines of code within the repo.
     max_depth : int
         Maximum directory depth of the repo. (The top level is depth 0.)
+    avg_file_length : float
+        Average number of lines between files in the repo.
     """
 
     def _format_pattern(self, esc_path, pattern):
@@ -265,12 +266,27 @@ class File:
         within the file.
     num_lines : int
         Total number of lines of code within the file.
-    methods : list of pair
+    methods : list of 4-tuples
+        List of tuples containing the indices of the first and last lines
+        of methods within the file, as well as the leading whitespace and
+        the length of the first line.
+    parameters : list of 3-tuples
+        List of tuples containing the line index and, relative to that
+        line, the indices of the first and last characters of method 
+        parameters within the file.
+    classes : list of ?
         List of pairs containing the indices of the first and last lines
-        of methods within the file.
-    classes : list of pair
-        List of pairs containing the indices of the first and last lines
-        of classes within the file.
+        of classes within the file?
+    libs : list of ?
+        Description
+    comments : list of ?
+        Description
+    ids : list of ?
+        Description
+    literals : list of ?
+        Description
+    operators : list of ?
+        Description
     num_tokens : int
         Total number of code tokens within the file.
     """
@@ -279,7 +295,6 @@ class File:
         self.file_path  = file_path
         self.file_ext   = file_ext
         self.line_objs  = []
-        self.num_lines  = 0
         self.methods    = []
         self.parameters = []
         self.classes    = []
@@ -300,14 +315,14 @@ class File:
             log.error("Error with lizard analysis.")
             raise RecursionError
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         # Tokens
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         self.num_tokens = analysis.token_count
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         # Lines
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         try:
             # Analyze each line in the file
             with open(file_path) as f:
@@ -321,48 +336,48 @@ class File:
             log.error("Could not read file: " + file_path)
             raise IOError
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         # Methods and Paramaters
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         for func in analysis.function_list:
-            num_spaces = len(re.search(r'(\s*).*',
-                                       lines[func.__dict__["start_line"] - 1]).group(1))
-            method = (func.__dict__["start_line"] - 1,
-                        func.__dict__["end_line"] - 1,
-                      num_spaces, len(lines[func.__dict__["start_line"] - 1]))
-            # parameter format: (line num, offset, end offset)
-            if len(func.parameters) != 0:
-                num_params = len(func.parameters)
-                for param in range(num_params):
-                    func_name = func.name if '.' not in func.name else func.name.split('.')[len(func.name.split('.'))-1]
-                    reg_string = r'(.*' + func_name.encode('unicode_escape').decode() + r'.*' + \
-                                 func.parameters[param].encode('unicode_escape').decode() + r').*'
-                    param_offset = len(re.search(reg_string, lines[func.__dict__["start_line"] - 1]).group(1))
-                    param_offset -= len(func.parameters[param])
-                    parameter = (func.__dict__["start_line"] - 1,
-                                 param_offset,
-                                 param_offset + len(func.parameters[param]))
-                self.parameters.append(parameter)
-            self.methods.append(method)
+            start_index = func.__dict__["start_line"] - 1
+            length      = len(lines[start_index])
+            lead_wspace = length - len(lines[start_index].lstrip())
 
-        # --------------------------------------------------------
+            method = (start_index, func.__dict__["end_line"] - 1,
+                      lead_wspace, length)
+            self.methods.append(method)
+            
+            # parameter format: (line num, offset, end offset)          
+            for param in func.full_parameters:
+                p = "\s*".join(param.split())
+
+                # Match and determine span of parameter in line
+                # TODO: Consider function declaration spanning multiple lines.
+                #  We may need to patch lizard to allow for this.
+                offset = re.search(r"\((.+,\s*)*({})\s*([,:=].*|\))".format(p),
+                                     lines[start_index]).span(2)
+                parameter = (start_index, offset[0], offset[1]-1)
+                self.parameters.append(parameter)
+
+        # ----------------------------------------------------------------
         # Classes
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         self.classes = find_classes(lines, file_ext)
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         # Libraries
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         self.libs = find_libs(lines, file_ext)
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         # Comments
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         self.comments = find_comments(lines, file_path, file_ext)
 
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         # Identifiers, Literals, and Operators
-        # --------------------------------------------------------
+        # ----------------------------------------------------------------
         ids = find_ids(lines, file_path, file_ext)
         self.ids = ids[0]
         self.literals = ids[3]
