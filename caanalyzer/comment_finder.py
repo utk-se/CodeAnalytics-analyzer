@@ -1,6 +1,7 @@
 import re
 from cadistributor import log
 
+
 def find_comments(content, path, lang):
     comments = []
     if lang == 'py':
@@ -9,11 +10,6 @@ def find_comments(content, path, lang):
             tokens = tokenize.tokenize(f.readline)
             for token in tokens:
                 if tokenize.tok_name[token.type] == 'COMMENT':
-                    # comments.append([token.string, token.start, token.end])
-                    #print(token.start[0])
-                    #print(token.start[1])
-                    #print(token.end[0])
-                    #print(token.end[1])
                     comments.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
 
     # comments format: [comment name, [start line, start offset], [end line, end offset]]

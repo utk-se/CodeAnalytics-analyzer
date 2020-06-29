@@ -1,5 +1,4 @@
 import re
-from cadistributor import log
 
 
 def space_counter(string):  # counts num spaces before class keyword
@@ -12,14 +11,33 @@ def space_counter(string):  # counts num spaces before class keyword
     return space_count
 
 
-def find_classes(content, lang, verbose=0):
+def find_classes(content, lang, verbose=0, py2=0):
+    if not py2:
+        from cadistributor import log
     class_tuples = []
     if lang == 'py':
-        import ast
-        my_ast = ast.parse(''.join(content))
+        try:
+            import ast
+            if not py2:
+                my_ast = ast.parse(''.join(content))
+            else:
+                my_ast = ast.parse(content)
+        except SyntaxError:
+            # PYTHON 2
+            if py2:  # getting in here means python2 still gives syntax errors
+                return []
+            import subprocess
+            import os
+            python2_name = 'python2'
+            process = subprocess.check_output([python2_name,  # python2 may not be the command on your machine
+                                               os.path.abspath(__file__),
+                                               ''.join(content), 'py', '0', '1'])
+            p_result = eval(process.decode())
+            return p_result
+
         for each in my_ast.body:
             if type(each).__name__ == 'ClassDef':
-                class_tuples.append(tuple([each.lineno - 1, each.body[len(each.body)-1].lineno - 1, 0, 1]))
+                class_tuples.append(tuple([each.lineno - 1, each.body[len(each.body) - 1].lineno - 1, 0, 1]))
 
     elif lang == 'js':
         import esprima
@@ -118,3 +136,9 @@ def find_classes(content, lang, verbose=0):
         log.err(lang + " not supported yet")
 
     return class_tuples
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.append('..')
+    print(find_classes(content=sys.argv[1], lang=sys.argv[2], verbose=int(sys.argv[3]), py2=int(sys.argv[4])))

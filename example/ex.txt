@@ -1,0 +1,46 @@
+# class TqdmToLogger(io.StringIO):
+#     """
+#         Output stream for TQDM which will output to logger module instead of
+#         the StdOut.
+#     """
+#     logger = None
+#     level = None
+#     buf = ''
+#
+#     def __init__(self, logger, level=None):
+#         super(TqdmToLogger, self).__init__()
+#         self.logger = logger
+#         self.level = level or logging.INFO
+#
+#     def write(self, buf):
+#         self.buf = buf.strip('\r\n\t ')
+#
+#     def flush(self):
+#         self.logger.log(self.level, self.buf)
+#
+
+# https://www.tutorialspoint.com/How-to-find-the-nth-occurrence-of-substring-in-a-string-in-Python
+
+# try:
+#     trying_to_check_error
+#
+# except NameError, err:
+#     print err, 'Error Caused'   # Would not work in Python 3.x
+
+# for x in xrange(1, 5):
+#
+#     print(x),
+if True:
+    import ast
+import sys
+import json
+
+print 1+2
+
+#print(1+2)
+#
+# class ayy:
+#     pass
+#
+class aysssy:
+    pass
