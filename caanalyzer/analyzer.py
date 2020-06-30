@@ -274,19 +274,18 @@ class File:
         List of tuples containing the line index and, relative to that
         line, the indices of the first and last characters of method 
         parameters within the file.
-    classes : list of ?
-        List of pairs containing the indices of the first and last lines
-        of classes within the file?
-    libs : list of ?
-        Description
-    comments : list of ?
-        Description
-    ids : list of ?
-        Description
-    literals : list of ?
-        Description
-    operators : list of ?
-        Description
+    classes : tuple of lists of 4 integers
+        Tuple of lists of starting line, ending line, starting offset, and ending offset of classes
+    libs : list of lists of 4 integers
+        List of lists of starting line, ending line, starting offset, and ending offset of libraries
+    comments : list of lists of 4 integers
+        List of lists of starting line, ending line, starting offset, and ending offset of comments
+    ids : list of lists of 4 integers
+        List of lists of starting line, ending line, starting offset, and ending offset of identifiers
+    literals : list of lists of 4 integers
+        List of lists of starting line, ending line, starting offset, and ending offset of literals
+    operators : list of lists of 4 integers
+        List of lists of starting line, ending line, starting offset, and ending offset of operators
     num_tokens : int
         Total number of code tokens within the file.
     """
@@ -354,8 +353,6 @@ class File:
                 p = "\s*".join(re.escape(param).split('\ '))
 
                 # Match and determine span of parameter in line
-                # TODO: Consider function declaration spanning multiple lines.
-                #  We may need to patch lizard to allow for this.
                 m = re.compile(r"\(?(.+,\s*)*({})\s*([,:=].*|\))".format(p))
                 while True:
                     match = m.search(lines[i])
