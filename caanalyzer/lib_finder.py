@@ -2,15 +2,15 @@
 def find_libs(content, path, lang, py2=0):
     if not py2:
         from cadistributor import log
-    else:
-        content = open(path).readlines()
-        content = [line[:-2]+'\n' for line in content if line.endswith('\r\n')]
     libs = []
     if lang == 'py':
         import astpretty
         import ast
         try:
-            my_ast = ast.parse(''.join(content))
+            if py2:
+                my_ast = ast.parse(content)
+            else:
+                my_ast = ast.parse(''.join(content))
         except SyntaxError:
             # PYTHON 2
             if py2:  # getting in here means python2 still gives syntax errors
@@ -18,12 +18,21 @@ def find_libs(content, path, lang, py2=0):
             import subprocess
             import os
             python2_name = 'python2'
-            process = subprocess.check_output([python2_name,  # python2 may not be the command on your machine
-                                               os.path.abspath(__file__),
-                                               ''.join(content), path, 'py', '1'])
-            p_result = eval(process.decode())
+            try:
+                process = subprocess.check_output([python2_name,  # python2 may not be the command on your machine
+                                                   os.path.abspath(__file__),
+                                                   ''.join(content), path, 'py', '1'],
+                                                  stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError("\ncommand '{}'\n\nreturn with error (code {}):\n{}".format(e.cmd,
+                                                                                               e.returncode,
+                                                                                               e.output.decode()))
 
+            p_result = eval(process.decode(errors='replace'))
             return p_result
+
+        if py2:
+            content = content.split('\n')
 
         def lib_recurse(body):
             for x in range(len(body)):

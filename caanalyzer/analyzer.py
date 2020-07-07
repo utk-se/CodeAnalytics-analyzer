@@ -21,6 +21,7 @@ import os
 import lizard
 import json
 import re
+import sys
 from .class_finder import find_classes
 from .lib_finder import find_libs
 from .comment_finder import find_comments
@@ -274,8 +275,8 @@ class File:
         List of tuples containing the line index and, relative to that
         line, the indices of the first and last characters of method 
         parameters within the file.
-    classes : tuple of lists of 4 integers
-        Tuple of lists of starting line, ending line, starting offset, and ending offset of classes
+    classes : tuple of lists of 3 integers and 1 list of integers
+        Tuple of lists of starting line, ending line, starting offset, and a list of endings offset of classes
     libs : list of lists of 4 integers
         List of lists of starting line, ending line, starting offset, and ending offset of libraries
     comments : list of lists of 4 integers
@@ -324,7 +325,7 @@ class File:
         # ----------------------------------------------------------------
         try:
             # Analyze each line in the file
-            with open(file_path) as f:
+            with open(file_path, errors='replace') as f:
                 lines = f.readlines()
                 self.num_lines = len(lines)
                 for index, line in enumerate(f):
@@ -350,36 +351,52 @@ class File:
             # parameter format: (line num, offset, end offset)
             i = start_index          
             for param in func.full_parameters:
-                p = "\s*".join(re.escape(param).split('\ '))
-
+                param = param.lstrip('\\').lstrip().lstrip('\\').lstrip()
+                param_split = [re.escape(one)+r'\s*(<.*>)*(\(.*\))*' for one in param.split()]
+                p = "\s*".join(param_split)
                 # Match and determine span of parameter in line
-                m = re.compile(r"\(?(.+,\s*)*({})\s*([,:=].*|\))".format(p))
+                m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p))
                 while True:
-                    match = m.search(lines[i])
+                    try:
+                        match = m.search(lines[i])
+                    except IndexError:
+                        print(p, file=sys.stderr)
+                        print(match.groups())
+                        print('##################')
+                        print(func.full_parameters)
+                        print('//////////////')
+                        print(lines[start_index])
+                        print(lines[start_index+1])
+                        print(lines[start_index+2])
+                        print(lines[start_index+3])
+                        print(lines[start_index+4])
+                        print(lines[start_index+5])
+                        print(lines[start_index+6])
+                        print(lines[start_index+7])
+                        exit()
                     if match is None:
                         i += 1
                     else:
                         break
-
                 offset = match.span(2)
                 parameter = (start_index, offset[0], offset[1]-1)
                 self.parameters.append(parameter)
-
+        log.info('finished methods and parameters')
         # ----------------------------------------------------------------
         # Classes
         # ----------------------------------------------------------------
         self.classes = find_classes(lines, file_ext)
-
+        log.info('finished classes')
         # ----------------------------------------------------------------
         # Libraries
         # ----------------------------------------------------------------
         self.libs = find_libs(lines, file_path, file_ext)
-
+        log.info('finished libs')
         # ----------------------------------------------------------------
         # Comments
         # ----------------------------------------------------------------
         self.comments = find_comments(lines, file_path, file_ext)
-
+        log.info('finished comments')
         # ----------------------------------------------------------------
         # Identifiers, Literals, and Operators
         # ----------------------------------------------------------------
@@ -387,6 +404,7 @@ class File:
         self.ids = ids[0]
         self.literals = ids[3]
         self.operators = ids[6]
+        log.info('finished ids')
 
     def export(self, output_path=None):
         """Output chosen analytics for the file.

@@ -1,5 +1,7 @@
 """Analyzes the shape of code within the current directory."""
 
+import sys
+sys.path.append('..')
 from cadistributor import log
 from caanalyzer import analyzer
 import pprint
@@ -10,5 +12,6 @@ def analyze(path, ignorefile=None):
 
 if __name__ == "__main__":
     log.info("Running analyzer")
+    # analyze(r"../congestion_benchmark")
     pp = pprint.PrettyPrinter()
-    pp.pprint(analyze(r"."))
+    pp.pprint(analyze(r"../MPI.NET-master"))
