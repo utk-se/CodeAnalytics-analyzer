@@ -12,6 +12,6 @@ def analyze(path, ignorefile=None):
 
 if __name__ == "__main__":
     log.info("Running analyzer")
-    # analyze(r"../congestion_benchmark")
-    pp = pprint.PrettyPrinter()
-    pp.pprint(analyze(r"../MPI.NET-master"))
+    analyze(r"../data-viz-master")
+    # pp = pprint.PrettyPrinter()
+    # pp.pprint(analyze(r"../data-viz-master"))

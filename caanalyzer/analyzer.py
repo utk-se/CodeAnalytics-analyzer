@@ -191,7 +191,18 @@ class Repo:
                 self.file_exts.add(file_ext)
 
                 try:
-                    file_obj = File(file_path, file_ext, tabsize)
+                    is_minified = False
+                    if file_ext == 'js':
+                        with open(file_path, 'r') as jsf:
+                            jsf_lines = jsf.readlines()
+                            no_news = True
+                            if len(jsf_lines) > 1:
+                                no_news = False
+                            if no_news or ' ' not in jsf_lines[0][:50]:
+                                is_minified = True
+                                log.error(file_path + ' is minified')
+                    if not is_minified:
+                        file_obj = File(file_path, file_ext, tabsize)
                 except (RecursionError, IOError) as e:
                     continue
 
@@ -305,6 +316,7 @@ class File:
         self.operators  = []
 
         lines = []
+        log.info(file_path)
 
         try:
             analysis = lizard.analyze_file(file_path)
@@ -360,7 +372,7 @@ class File:
                     try:
                         match = m.search(lines[i])
                     except IndexError:
-                        print(p, file=sys.stderr)
+                        print(p)
                         print(match.groups())
                         print('##################')
                         print(func.full_parameters)
