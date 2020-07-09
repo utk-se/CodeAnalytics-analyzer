@@ -12,6 +12,6 @@ def analyze(path, ignorefile=None):
 
 if __name__ == "__main__":
     log.info("Running analyzer")
-    analyze(r"../data-viz-master")
+    analyze(r"../MPI.NET-master")
     # pp = pprint.PrettyPrinter()
-    # pp.pprint(analyze(r"../data-viz-master"))
+    # pp.pprint(analyze(r"../example"))

@@ -1,3 +1,29 @@
+class HandleBadPython(BaseException):
+    pass
+
+
+def handle_bad_python(path):
+    """This function is needed when building and parsing the AST doesn't work due to bad python source code"""
+    import tokenize
+    libs = []
+    with open(path, 'rb') as f:
+        f.seek(0)
+        tokens = list(tokenize.tokenize(f.readline))
+        for i, token in enumerate(tokens):
+            if tokenize.tok_name[token.type] == 'NAME' and token.string == 'import':  # found a library
+                if token.line.startswith('from'):
+                    libs.append([token.start[0]-1,
+                                 token.end[0]-1,
+                                 0,
+                                 len(token.line.replace('\r\n', '\n'))])
+                else:
+                    libs.append([token.start[0] - 1,
+                                 token.end[0] - 1,
+                                 token.start[1],
+                                 len(token.line.replace('\r\n', '\n'))])
+    return libs
+
+
 # format: line start, line end, offset start, offset end
 def find_libs(content, path, lang, py2=0):
     if not py2:
@@ -14,7 +40,7 @@ def find_libs(content, path, lang, py2=0):
         except SyntaxError:
             # PYTHON 2
             if py2:  # getting in here means python2 still gives syntax errors
-                return []
+                raise HandleBadPython
             import subprocess
             import os
             python2_name = 'python2'
@@ -24,12 +50,17 @@ def find_libs(content, path, lang, py2=0):
                                                    ''.join(content), path, 'py', '1'],
                                                   stderr=subprocess.STDOUT)
             except subprocess.CalledProcessError as e:
+                error = e.output.decode().split()[-1].replace('__main__.', '')
+                if error == 'HandleBadPython':
+                    return handle_bad_python(path)
                 raise RuntimeError("\ncommand '{}'\n\nreturn with error (code {}):\n{}".format(e.cmd,
                                                                                                e.returncode,
                                                                                                e.output.decode()))
 
             p_result = eval(process.decode(errors='replace'))
             return p_result
+        except:
+            return handle_bad_python(path)
 
         if py2:
             content = content.split('\n')

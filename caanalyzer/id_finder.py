@@ -1,6 +1,10 @@
 import re
 
 
+class HandleBadPython(BaseException):
+    pass
+
+
 c_plusplus_keywords = ['asm', 'else', 'new', 'this', 'auto', 'enum', 'operator', 'throw', 'bool', 'explicit',
                        'private', 'true', 'break', 'export', 'protected', 'try', 'case', 'extern', 'public', 'typedef',
                        'catch', 'false', 'register', 'typeid', 'char', 'float', 'reinterpret_cast', 'typename', 'class',
@@ -22,6 +26,37 @@ def fullmatch(regex, string, flags=0):
     return re.match("(?:" + regex + r")\Z", string, flags=flags)
 
 
+def handle_bad_python(path):
+    """This function is needed when building and parsing the AST doesn't work due to bad python source code"""
+    import tokenize
+    id_counter = 0
+    op_counter = 0
+    lit_counter = 0
+    ids = list()
+    ops = list()
+    lits = list()
+    unique_ops = set()
+    unique_lits = set()
+    unique_ids = set()
+    with open(path, 'rb') as f:
+        tokens = tokenize.tokenize(f.readline)
+        for token in tokens:
+            if tokenize.tok_name[token.type] == 'NAME':
+                id_counter += 1
+                ids.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
+                unique_ids.add(token.string.replace('\r\n', '\n'))
+            if tokenize.tok_name[token.type] == 'STRING' or tokenize.tok_name[token.type] == 'NUMBER':
+                lit_counter += 1
+                lits.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
+                unique_lits.add(token.string.replace('\r\n', '\n'))
+            if tokenize.tok_name[token.type] == 'OP':
+                op_counter += 1
+                ops.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
+                unique_ops.add(token.string.replace('\r\n', '\n'))
+    return tuple([ids, unique_ids, id_counter, lits, unique_lits, lit_counter, ops, unique_ops, op_counter])
+
+
+# [starting line, ending line, starting offset, ending offset]
 def find_ids(content, path, lang, verbose=0, py2=0):
     if not py2:
         from cadistributor import log
@@ -31,9 +66,9 @@ def find_ids(content, path, lang, verbose=0, py2=0):
     ids = list()
     ops = list()
     lits = list()
-    unique_ops = set()  # list of operators with starting line and starting position
-    unique_lits = set()  # list of literals with starting line and starting position
-    unique_ids = set()  # list of identifiers with starting line and starting position
+    unique_ops = set()
+    unique_lits = set()
+    unique_ids = set()
 
     if lang == 'py':
         import astpretty
@@ -46,7 +81,7 @@ def find_ids(content, path, lang, verbose=0, py2=0):
         except SyntaxError:
             # PYTHON 2
             if py2:
-                return tuple()
+                raise HandleBadPython
             import subprocess
             import os
             python2_name = 'python2'
@@ -56,14 +91,16 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                                                    ''.join(content), path, 'py', '0', '1'],
                                                   stderr=subprocess.STDOUT)
             except subprocess.CalledProcessError as e:
+                error = e.output.decode().split()[-1].replace('__main__.', '')
+                if error == 'HandleBadPython':
+                    return handle_bad_python(path)
                 raise RuntimeError("\ncommand '{}'\n\nreturn with error (code {}):\n{}".format(e.cmd,
                                                                                                e.returncode,
                                                                                                e.output.decode()))
             p_result = eval(process.decode(errors='replace'))
             return p_result
-
-        if py2:
-            fixed_content = content.split('\n')
+        except:
+            return handle_bad_python(path)
 
         for x in range(len(my_ast.body)):
             ast_piece = astpretty.pformat(my_ast.body[x])
@@ -93,15 +130,16 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                     unique_ids.add(info[2][4:len(info[2]) - 2])
                 # if bool(fullmatch(pattern2, each)):
                 if bool(fullmatch(r".*Num\(.*\).*", each)):
-                    lit_counter += 1
                     info = re.search(r".*Num\((.*)\).*", each).group(1)
                     info = info.split(', ')
-                    # lits.append([info[2][2:], info[0][7:], info[1][11:]])
-                    lits.append([int(info[0][7:]) - 1,
-                                 int(info[0][7:]) - 1,
-                                 int(info[1][11:]),
-                                 int(info[1][11:]) + len(info[2][2:])])
-                    unique_lits.add(info[2][2:])
+                    if int(info[1][11:]) >= 0:
+                        lit_counter += 1
+                        # lits.append([info[2][2:], info[0][7:], info[1][11:]])
+                        lits.append([int(info[0][7:]) - 1,
+                                     int(info[0][7:]) - 1,
+                                     int(info[1][11:]),
+                                     int(info[1][11:]) + len(info[2][2:])])
+                        unique_lits.add(info[2][2:])
                 # if bool(fullmatch(pattern3, each)):
                 if bool(fullmatch(r".*Str\(.*\).*", each)):
                     info = re.search(r".*Str\((.*)\).*", each).group(1)
@@ -115,11 +153,13 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                     #              int(info[0][7:]),
                     #              int(info[1][11:]),
                     #              int(info[1][11:]) + len(info[2][3:len(info[2]) - 1])])
-                    lits.append([int(info_split[0]) - 1,
-                                int(info_split[0]) - 1,
-                                int(info_split[1]),
-                                int(info_split[1]) + len(info_split[2]) - 1])
-                    unique_lits.add(info[2][3:len(info[2]) - 1])
+                    if int(info_split[1]) >= 0:
+                        lit_counter += 1
+                        lits.append([int(info_split[0]) - 1,
+                                    int(info_split[0]) - 1,
+                                    int(info_split[1]),
+                                    int(info_split[1]) + len(info_split[2]) - 1])
+                        unique_lits.add(info[2][3:len(info[2]) - 1])
                 # if bool(fullmatch(pattern, each)):
                 if bool(fullmatch(r".*op=.*\(\),.*", each)):
                     op_counter += 1
@@ -415,7 +455,7 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                   '&=', '|=', '^=', ',', '+', '-', '*', '**', '/', '%', '++', '--', '<<', '>>', '>>>', '&',
                   '|', '^', '!', '~', '&&', '||', '?', ':', '===', '==', '>=',
                   '<=', '<', '>', '!=', '!==']
-        items = list(esprima.tokenize(''.join(content), options={'loc': True}))
+        items = list(esprima.tokenize(''.join(content), options={'loc': True, 'tolerant': True}))
         for each in items:
             if each.type == 'Identifier':
                 id_counter += 1

@@ -287,17 +287,18 @@ class File:
         line, the indices of the first and last characters of method 
         parameters within the file.
     classes : tuple of lists of 3 integers and 1 list of integers
-        Tuple of lists of starting line, ending line, starting offset, and a list of endings offset of classes
+        Tuple of lists of starting line, ending line, starting offset, and a list of endings offset of classes.
+        If the list of ending offsets is just an integer then that means the class only spanned one line.
     libs : list of lists of 4 integers
-        List of lists of starting line, ending line, starting offset, and ending offset of libraries
+        List of lists of starting line, ending line, starting offset, and ending offset of libraries.
     comments : list of lists of 4 integers
-        List of lists of starting line, ending line, starting offset, and ending offset of comments
+        List of lists of starting line, ending line, starting offset, and ending offset of comments.
     ids : list of lists of 4 integers
-        List of lists of starting line, ending line, starting offset, and ending offset of identifiers
+        List of lists of starting line, ending line, starting offset, and ending offset of identifiers.
     literals : list of lists of 4 integers
-        List of lists of starting line, ending line, starting offset, and ending offset of literals
+        List of lists of starting line, ending line, starting offset, and ending offset of literals.
     operators : list of lists of 4 integers
-        List of lists of starting line, ending line, starting offset, and ending offset of operators
+        List of lists of starting line, ending line, starting offset, and ending offset of operators.
     num_tokens : int
         Total number of code tokens within the file.
     """
@@ -397,7 +398,7 @@ class File:
         # ----------------------------------------------------------------
         # Classes
         # ----------------------------------------------------------------
-        self.classes = find_classes(lines, file_ext)
+        self.classes = find_classes(lines, file_path, file_ext)
         log.info('finished classes')
         # ----------------------------------------------------------------
         # Libraries
