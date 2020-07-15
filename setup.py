@@ -28,6 +28,7 @@ setup(
         "lizard>=1.17.3",
         "astpretty",
         "esprima",
+        "parso",
         "javac_parser",
         # "ca-distributor @ git+ssh://git@github.com/utk-se/CodeAnalytics-distributor.git#egg=ca-distributor"
     ],

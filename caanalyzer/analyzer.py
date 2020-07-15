@@ -19,6 +19,7 @@ Notes
 
 import os
 import lizard
+import parso
 import json
 import re
 import sys
@@ -26,6 +27,7 @@ from .class_finder import find_classes
 from .lib_finder import find_libs
 from .comment_finder import find_comments
 from .id_finder import find_ids
+from .py_func_arg_finder import find_methods_and_args
 from cadistributor import log
 
 SUPPORTED_FILETYPES = ["c", "cpp", "h", "java", "js", "py"]
@@ -352,48 +354,55 @@ class File:
         # ----------------------------------------------------------------
         # Methods and Paramaters
         # ----------------------------------------------------------------
-        for func in analysis.function_list:
-            start_index = func.__dict__["start_line"] - 1
-            length      = len(lines[start_index])
-            lead_wspace = length - len(lines[start_index].lstrip())
+        if file_ext != 'py':
+            for func in analysis.function_list:
+                start_index = func.__dict__["start_line"] - 1
+                length      = len(lines[start_index])
+                lead_wspace = length - len(lines[start_index].lstrip())
 
-            method = (start_index, func.__dict__["end_line"] - 1,
-                      lead_wspace, length)
-            self.methods.append(method)
-            
-            # parameter format: (line num, offset, end offset)
-            i = start_index          
-            for param in func.full_parameters:
-                param = param.lstrip('\\').lstrip().lstrip('\\').lstrip()
-                param_split = [re.escape(one)+r'\s*(<.*>)*(\(.*\))*' for one in param.split()]
-                p = "\s*".join(param_split)
-                # Match and determine span of parameter in line
-                m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p))
-                while True:
-                    try:
-                        match = m.search(lines[i])
-                    except IndexError:
-                        print(p)
-                        print(match.groups())
-                        print('##################')
-                        print(func.full_parameters)
-                        print('//////////////')
-                        print(lines[start_index])
-                        print(lines[start_index+1])
-                        print(lines[start_index+2])
-                        print(lines[start_index+3])
-                        print(lines[start_index+4])
-                        print(lines[start_index+5])
-                        print(lines[start_index+6])
-                        print(lines[start_index+7])
-                        exit()
-                    if match is None:
-                        i += 1
-                    else:
-                        break
-                offset = match.span(2)
-                parameter = (start_index, offset[0], offset[1]-1)
-                self.parameters.append(parameter)
+                method = (start_index, func.__dict__["end_line"] - 1,
+                          lead_wspace, length)
+                self.methods.append(method)
+
+                # parameter format: (line num, offset, end offset)
+                i = start_index
+                for param in func.full_parameters:
+                    param = param.lstrip('\\').lstrip().lstrip('\\').lstrip()
+                    param_split = [re.escape(one)+r'\s*(<.*>)*(\(.*\))*' for one in param.split()]
+                    p = "\s*".join(param_split)
+                    # Match and determine span of parameter in line
+                    m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p))
+                    while True:
+                        try:
+                            match = m.search(lines[i])
+                        except IndexError:
+                            print(p)
+                            print(match.groups())
+                            print('##################')
+                            print(func.full_parameters)
+                            print('//////////////')
+                            print(lines[start_index])
+                            print(lines[start_index+1])
+                            print(lines[start_index+2])
+                            print(lines[start_index+3])
+                            print(lines[start_index+4])
+                            print(lines[start_index+5])
+                            print(lines[start_index+6])
+                            print(lines[start_index+7])
+                            exit()
+                        if match is None:
+                            i += 1
+                        else:
+                            break
+                    offset = match.span(2)
+                    parameter = (start_index, offset[0], offset[1]-1)
+                    self.parameters.append(parameter)
+        else:
+            with open(file_path, errors='replace') as s:
+                parser = parso.parse(s.read())
+                mags = find_methods_and_args(parser.children, lines)
+                self.methods = mags[0]
+                self.parameters = mags[1]
         log.info('finished methods and parameters')
         # ----------------------------------------------------------------
         # Classes
