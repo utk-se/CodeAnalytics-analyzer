@@ -354,6 +354,15 @@ class File:
         # ----------------------------------------------------------------
         # Methods and Paramaters
         # ----------------------------------------------------------------
+        def count_newlines(string, char_offset):
+            char_index = char_offset
+            ret = 0
+            while char_index >= 0:
+                if string[char_index] == '\n':
+                    ret += 1
+                char_index -= 1
+            return ret
+
         if file_ext != 'py':
             for func in analysis.function_list:
                 start_index = func.__dict__["start_line"] - 1
@@ -371,32 +380,53 @@ class File:
                     param_split = [re.escape(one)+r'\s*(<.*>)*(\(.*\))*' for one in param.split()]
                     p = "\s*".join(param_split)
                     # Match and determine span of parameter in line
-                    m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p))
+                    m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p), re.DOTALL)
+                    spans_multiple_lines = False
+                    start_l = start_index
+                    start_offset = 0
+                    end_l = func.__dict__["end_line"] - 1
+                    end_offset = 0
                     while True:
                         try:
                             match = m.search(lines[i])
                         except IndexError:
-                            print(p)
-                            print(match.groups())
-                            print('##################')
-                            print(func.full_parameters)
-                            print('//////////////')
-                            print(lines[start_index])
-                            print(lines[start_index+1])
-                            print(lines[start_index+2])
-                            print(lines[start_index+3])
-                            print(lines[start_index+4])
-                            print(lines[start_index+5])
-                            print(lines[start_index+6])
-                            print(lines[start_index+7])
-                            exit()
+                            spans_multiple_lines = True
+                            func_lines = [func_line for func_line in lines[start_index:func.__dict__["end_line"]]]
+                            func_lines = ''.join(func_lines)
+                            match = m.search(func_lines)
+                            if match is None:
+                                log.error("Can't find'", param, "'!")
+                                exit()
+                            else:
+                                start_l = start_index + count_newlines(func_lines, match.start(2))
+                                start_offset = match.start(2)
+                                end_l = start_index + count_newlines(func_lines, match.end(2))
+                                sum_lengths = 0
+                                for param_line in lines[start_l:end_l]:
+                                    sum_lengths += len(param_line)
+                                end_offset = match.end(2) - sum_lengths
+                                break
                         if match is None:
                             i += 1
                         else:
                             break
-                    offset = match.span(2)
-                    parameter = (start_index, offset[0], offset[1]-1)
-                    self.parameters.append(parameter)
+                    if spans_multiple_lines:
+                        func_lines = list(range(start_l, end_l+1))
+                        start_offsets = []
+                        end_offsets = []
+                        start_offsets.append(start_offset)
+                        end_offsets.append(len(lines[start_l]))
+                        for func_line in lines[start_l+1:end_l]:
+                            start_offsets.append(len(func_line) - len(func_line.lstrip()))
+                            end_offsets.append(len(func_line))
+                        start_offsets.append(len(lines[end_l]) - len(lines[end_l].lstrip()))
+                        end_offsets.append(end_offset)
+                        parameter = (func_lines, start_offsets, end_offsets)
+                        self.parameters.append(parameter)
+                    else:
+                        offset = match.span(2)
+                        parameter = (start_index, offset[0], offset[1]-1)
+                        self.parameters.append(parameter)
         else:
             with open(file_path, errors='replace') as s:
                 parser = parso.parse(s.read())
