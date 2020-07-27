@@ -98,9 +98,9 @@ def find_libs(content, path, lang, py2=0):
 
     elif lang == 'js':
         import re
-        pattern1 = re.compile("import(.*)from(.*);")
-        pattern2 = re.compile("import(.*);")
-        pattern3 = re.compile(r".*import\((.*)\);")
+        pattern1 = re.compile("import(.*)from(.*)")
+        pattern2 = re.compile("import(.*)")
+        pattern3 = re.compile(r".*import\((.*)\)")
         for x, line in enumerate(content):
             res1 = re.fullmatch(pattern1, line.strip())
             res2 = re.fullmatch(pattern2, line.strip())
@@ -108,15 +108,15 @@ def find_libs(content, path, lang, py2=0):
             if res1 is not None:
                 res1 = res1.group(1).strip()
                 # libs.append([res1, x])
-                libs.append([x, x, 0, len(line)])
+                libs.append([x, x, len(line) - len(line.lstrip()), len(line)])
             elif res2 is not None:
                 res2 = res2.group(1).strip()[1:-1]
                 # libs.append([res2, x])
-                libs.append([x, x, 0, len(line)])
+                libs.append([x, x, len(line) - len(line.lstrip()), len(line)])
             elif res3 is not None:
                 res3 = res3.group(1).strip()[1:-1]
                 # libs.append([res3, x])
-                libs.append([x, x, 0, len(line)])
+                libs.append([x, x, len(line) - len(line.lstrip()), len(line)])
 
     else:
         log.error(lang + " not supported yet")

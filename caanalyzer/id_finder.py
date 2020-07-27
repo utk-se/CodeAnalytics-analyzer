@@ -461,21 +461,21 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                 id_counter += 1
                 # ids.append([each.value, [each.loc.start.line, each.loc.end.line],
                 #             each.loc.start.column, each.loc.end.column])
-                ids.append([each.loc.start.line, each.loc.end.line,
+                ids.append([each.loc.start.line-1, each.loc.end.line-1,
                             each.loc.start.column, each.loc.end.column])
                 unique_ids.add(each.value)
             if each.type == 'Punctuator' and each.value in js_ops:
                 op_counter += 1
                 # ops.append([each.value, [each.loc.start.line, each.loc.end.line],
                 #             each.loc.start.column, each.loc.end.column])
-                ops.append([each.loc.start.line, each.loc.end.line,
+                ops.append([each.loc.start.line-1, each.loc.end.line-1,
                             each.loc.start.column, each.loc.end.column])
                 unique_ops.add(each.value)
             if each.type == 'String' or each.type == 'Numeric':
                 lit_counter += 1
                 # lits.append([each.value, [each.loc.start.line, each.loc.end.line],
                 #              each.loc.start.column, each.loc.end.column])
-                lits.append([each.loc.start.line, each.loc.end.line,
+                lits.append([each.loc.start.line-1, each.loc.end.line-1,
                             each.loc.start.column, each.loc.end.column])
                 unique_lits.add(each.value)
 

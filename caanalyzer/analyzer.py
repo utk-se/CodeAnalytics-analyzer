@@ -22,7 +22,12 @@ import lizard
 import parso
 import json
 import re
+import itertools
+import pprint
+import subprocess
+import shlex
 import sys
+import esprima
 from .class_finder import find_classes
 from .lib_finder import find_libs
 from .comment_finder import find_comments
@@ -35,6 +40,8 @@ SUPPORTED_FILETYPES = ["c", "cpp", "h", "java", "js", "py"]
 
 ESC_SEP = re.escape(os.sep)
 """Regex-escaped os separator."""
+
+pp = pprint.PrettyPrinter()
 
 class Repo:
     """Generates analytics for a code repository.
@@ -194,6 +201,7 @@ class Repo:
 
                 try:
                     is_minified = False
+                    is_es6 = False
                     if file_ext == 'js':
                         with open(file_path, 'r') as jsf:
                             jsf_lines = jsf.readlines()
@@ -203,8 +211,15 @@ class Repo:
                             if no_news or ' ' not in jsf_lines[0][:50]:
                                 is_minified = True
                                 log.error(file_path + ' is minified')
-                    if not is_minified:
+                            try:
+                                esprima.parse(''.join(jsf_lines), options={'loc': True, 'tolerant': True})
+                            except esprima.Error:
+                                is_es6 = True
+                                log.error('esprima cannot parse ' + file_path)
+                    if not is_minified and not is_es6:
                         file_obj = File(file_path, file_ext, tabsize)
+                    else:
+                        continue
                 except (RecursionError, IOError) as e:
                     continue
 
@@ -259,6 +274,7 @@ class Repo:
 
         return repo_obj
 
+
 class File:
     """Stores analytics for a file.
 
@@ -304,6 +320,231 @@ class File:
     num_tokens : int
         Total number of code tokens within the file.
     """
+
+    # helper function
+    def lizard_broken(self, lines, ext, path):
+        def sub_entire_line(string):
+            while 1:
+                try:
+                    string = re.sub(re.compile(r'[a-z|A-Z]+: ',
+                                               re.DOTALL),
+                                    '"' + re.search(re.compile(r'([a-z|A-Z]+): '), string).group(1) + '":',
+                                    string, count=1)
+                except AttributeError:
+                    break
+            return string
+
+        start_tups = list()
+        end_tups = list()
+
+        def format_json_str(json_l, is_method=False):
+            new_json_l = []
+            if not is_method:
+                for j_one in json_l:
+                    if not (not j_one.strip().endswith('{') and (j_one.strip().startswith('value:')
+                                                                 or j_one.strip().startswith('raw:')
+                                                                 or j_one.strip().startswith('cooked:')
+                                                                 or j_one.strip().startswith('pattern:')
+                                                                 or j_one.strip().startswith('None'))):
+                        new_json_l.append(j_one)
+                return new_json_l
+            in_callee = False
+            med_json_l = []
+            spaces_before_type = len(json_l[0]) - len(json_l[0].lstrip())
+            for j_one in json_l:
+                if len(j_one) - len(j_one.lstrip()) == spaces_before_type and j_one.strip().startswith('callee: {'):
+                    in_callee = True
+                if in_callee:
+                    med_json_l.append(j_one)
+                if in_callee and ('}' in j_one.strip() and len(j_one) - len(j_one.lstrip()) == spaces_before_type):
+                    in_callee = False
+                if len(j_one) - len(j_one.lstrip()) == spaces_before_type and j_one.strip().startswith('loc: '):
+                    med_json_l.append(j_one)
+            for j_one in med_json_l:
+                if not (not j_one.strip().endswith('{') and (j_one.strip().startswith('value:')
+                                                             or j_one.strip().startswith('raw:')
+                                                             or j_one.strip().startswith('cooked:')
+                                                             or j_one.strip().startswith('pattern:')
+                                                             or j_one.strip().startswith('None'))):
+                    new_json_l.append(j_one)
+            return new_json_l
+
+        def js_find_locs(dictionary):
+            if isinstance(dictionary, list):
+                for d_one in dictionary:
+                    js_find_locs(d_one)
+            for key, value in dictionary.items():
+                if key == 'loc':
+                    if (value['start']['line'] - 1, value['start']['column']) not in start_tups:
+                        start_tups.append((value['start']['line'] - 1,
+                                           value['start']['column']))
+                    if (value['end']['line'] - 1, value['end']['column']) not in end_tups:
+                        end_tups.append((value['end']['line'] - 1,
+                                         value['end']['column']))
+                    continue
+                if isinstance(value, list):
+                    for v_one in value:
+                        if isinstance(v_one, dict) or isinstance(v_one, list):
+                            js_find_locs(v_one)
+                elif isinstance(value, dict):
+                    js_find_locs(value)
+        '''
+        if ext == 'c' or ext == 'h':
+            cmd = 'clang -Xclang -ast-dump -fsyntax-only "' + path + '"'
+            p = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+            ast_str = p.decode(errors='replace')
+            if ast_str.startswith("error"):
+                log.error(ast_str)
+            l_ast = ast_str.split('\n')
+            for ast_line in l_ast:
+                print(ast_line)
+            exit()
+        '''
+        #elif ext == 'js':
+        if ext == 'js':
+            try:
+                items = esprima.parse(''.join(lines), options={'loc': True, 'tolerant': True})
+            except esprima.Error:
+                return False
+            items = str(items).split('\n')
+            for i_item, item in enumerate(items):
+                # methods
+                # if ('Function' in item or 'Method' in item) and 'ArrowFunctionExpression' not in item:
+                # if 'NewExpression' in item:
+                # if (('type' in item and 'Function' in item) or ('type' in item and 'Method' in item))\
+                #         and 'ArrowFunctionExpression' not in item and 'FunctionDeclaration' not in item\
+                #         and 'FunctionExpression' not in item and 'MethodDefinition' not in item:
+                #     l_spaces = len(item) - len(item.lstrip())
+                #     for j, other in enumerate(items[i_item + 1:]):
+                #         if other.strip().startswith('loc:') and (len(other) - len(other.lstrip()) == l_spaces):
+                #             thing = items[i_item:i_item + j + 2]
+                #             print('HAVENT CAUGHT THIS YET')
+                #             for one in thing:
+                #                 print(one)
+                #             exit()
+                if 'type: "CallExpression"' in item or 'type: "NewExpression"' in item\
+                        or 'type: "ArrowFunctionExpression"' in item or 'type: "FunctionDeclaration"' in item\
+                        or 'type: "FunctionExpression"' in item or 'type: "MethodDefinition"' in item:
+                    l_spaces = len(item) - len(item.lstrip())
+                    for j, other in enumerate(items[i_item + 1:]):
+                        if other.strip().startswith('loc:') and (len(other) - len(other.lstrip()) == l_spaces):
+                            method = items[i_item:i_item + j + 2]
+                            fixed_method = []
+                            method = format_json_str(method, True)
+                            for each in method:
+                                try:
+                                    fixed_method.append(sub_entire_line(each))
+                                except AttributeError:
+                                    fixed_method.append(each)
+                            fixed_method_str = '{' \
+                                               + \
+                                               '\n'.join(fixed_method).strip()[:-1].replace(': False', ': "False"'). \
+                                                   replace(': True', ': "True"').replace(':False', ':"False"'). \
+                                                   replace(':True', ':"True"') + '}}'
+                            try:
+                                method = json.loads(fixed_method_str)
+                            except json.decoder.JSONDecodeError as e:
+                                print('method')
+                                print(e)
+                                print(method[int(str(e).split()[3]) - 2])
+                                print(method[int(str(e).split()[3]) - 1])
+                                print(method[int(str(e).split()[3])])
+                                exit()
+                            if 'ArrowFunctionExpression' in item or 'FunctionDeclaration' in item\
+                                    or 'FunctionExpression' in item or 'MethodDefinition' in item:
+                                sl = method['loc']['start']['line']
+                                el = method['loc']['end']['line']
+                                sc = method['loc']['start']['column']
+                                ec = method['loc']['end']['column']
+                                sc_l = [sc]
+                                sc_l.extend([len(k) - len(k.lstrip()) for k in lines[sl:el]])
+                                ec_l = [len(k) for k in lines[sl - 1: el - 1]]
+                                ec_l.append(ec)
+                                self.methods.append([sl - 1, el - 1, sc_l, ec_l])
+                            else:
+                                if method.get('callee') is None:
+                                    log.error('no callee for method')
+                                elif method['callee'].get('property') is not None:
+                                    sl = method['callee']['property']['loc']['start']['line']
+                                    el = method['callee']['property']['loc']['end']['line']
+                                    sc = method['callee']['property']['loc']['start']['column']
+                                    ec = method['callee']['property']['loc']['end']['column']
+                                    sc_l = [sc]
+                                    sc_l.extend([len(k) - len(k.lstrip()) for k in lines[sl:el]])
+                                    ec_l = [len(k) for k in lines[sl - 1: el - 1]]
+                                    ec_l.append(ec)
+                                    if sl == el:
+                                        self.methods.append([sl - 1, sc, ec])
+                                    else:
+                                        self.methods.append([sl - 1, el - 1, sc_l, ec_l])
+                                else:
+                                    sl = method['callee']['loc']['start']['line']
+                                    el = method['callee']['loc']['end']['line']
+                                    sc = method['callee']['loc']['start']['column']
+                                    ec = method['callee']['loc']['end']['column']
+                                    sc_l = [sc]
+                                    sc_l.extend([len(k) - len(k.lstrip()) for k in lines[sl:el]])
+                                    ec_l = [len(k) for k in lines[sl - 1: el - 1]]
+                                    ec_l.append(ec)
+                                    if sl == el:
+                                        self.methods.append([sl - 1, sc, ec])
+                                    else:
+                                        self.methods.append([sl - 1, el - 1, sc_l, ec_l])
+                            break
+                # end of methods
+                # params
+                if item.strip() == 'params: [' or item.strip() == 'arguments: [':
+                    l_spaces = len(item) - len(item.lstrip())
+                    for j, other in enumerate(items[i_item + 1:]):
+                        if other.strip() == '],' and (len(other) - len(other.lstrip()) == l_spaces):
+                            params = items[i_item:i_item + j + 2]
+                            fixed_params = []
+                            params = format_json_str(params)
+                            for each in params:
+                                try:
+                                    fixed_params.append(sub_entire_line(each))
+                                except AttributeError:
+                                    fixed_params.append(each)
+                            fixed_params_str = '{' \
+                                               + \
+                                               '\n'.join(fixed_params).strip()[:-1].replace(': False', ': "False"'). \
+                                                   replace(': True', ': "True"').replace(':False', ':"False"'). \
+                                                   replace(':True', ':"True"') + '}'
+                            try:
+                                params = json.loads(fixed_params_str)
+                            except json.decoder.JSONDecodeError as e:
+                                print('parameter')
+                                print(e)
+                                print(params[int(str(e).split()[4]) - 2])
+                                print(params[int(str(e).split()[4]) - 1])
+                                print(params[int(str(e).split()[4])])
+                                exit()
+                            js_find_locs(params)
+                            if len(start_tups) > len(end_tups):
+                                start_tups = start_tups[:len(end_tups)]
+                            elif len(end_tups) > len(start_tups):
+                                end_tups = end_tups[:len(start_tups)]
+                            for loc in range(len(start_tups)):
+                                if start_tups[loc][0] == end_tups[loc][0]:
+                                    self.parameters.append((start_tups[loc][0],
+                                                            start_tups[loc][1],
+                                                            end_tups[loc][1]))
+                                else:
+                                    self.parameters.append((start_tups[loc][0],
+                                                            start_tups[loc][1],
+                                                            len(lines[start_tups[loc][0]])))
+                                    self.parameters.append((end_tups[loc][0],
+                                                            len(lines[end_tups[loc][0]])
+                                                            -
+                                                            len(lines[end_tups[loc][0]].lstrip()),
+                                                            end_tups[loc][1]))
+                            break
+                # end of params
+                start_tups.clear()
+                end_tups.clear()
+        else:  # no other languages supported yet for this function
+            return False
+        return True
 
     def __init__(self, file_path, file_ext, tabsize=4):
         self.file_path  = file_path
@@ -363,7 +604,10 @@ class File:
                 char_index -= 1
             return ret
 
-        if file_ext != 'py':
+        #if file_ext == 'js' or file_ext == 'c' or file_ext == 'h':
+        if file_ext == 'js':
+            self.lizard_broken(lines, file_ext, file_path)
+        elif file_ext != 'py':
             for func in analysis.function_list:
                 start_index = func.__dict__["start_line"] - 1
                 length      = len(lines[start_index])
@@ -378,7 +622,7 @@ class File:
                 for param in func.full_parameters:
                     param = param.lstrip('\\').lstrip().lstrip('\\').lstrip()
                     param_split = [re.escape(one)+r'\s*(<.*>)*(\(.*\))*' for one in param.split()]
-                    p = "\s*".join(param_split)
+                    p = r"\s*".join(param_split)
                     # Match and determine span of parameter in line
                     m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p), re.DOTALL)
                     spans_multiple_lines = False
@@ -386,6 +630,7 @@ class File:
                     start_offset = 0
                     end_l = func.__dict__["end_line"] - 1
                     end_offset = 0
+                    fixed_at_error = False
                     while True:
                         try:
                             match = m.search(lines[i])
@@ -395,8 +640,8 @@ class File:
                             func_lines = ''.join(func_lines)
                             match = m.search(func_lines)
                             if match is None:
-                                log.error("Can't find'", param, "'!")
-                                exit()
+                                fixed_at_error = self.lizard_broken(lines, file_ext)
+                                break
                             else:
                                 start_l = start_index + count_newlines(func_lines, match.start(2))
                                 start_offset = match.start(2)
@@ -410,7 +655,7 @@ class File:
                             i += 1
                         else:
                             break
-                    if spans_multiple_lines:
+                    if spans_multiple_lines and not fixed_at_error:
                         func_lines = list(range(start_l, end_l+1))
                         start_offsets = []
                         end_offsets = []
@@ -423,7 +668,7 @@ class File:
                         end_offsets.append(end_offset)
                         parameter = (func_lines, start_offsets, end_offsets)
                         self.parameters.append(parameter)
-                    else:
+                    elif not fixed_at_error:
                         offset = match.span(2)
                         parameter = (start_index, offset[0], offset[1]-1)
                         self.parameters.append(parameter)
@@ -433,6 +678,9 @@ class File:
                 mags = find_methods_and_args(parser.children, lines)
                 self.methods = mags[0]
                 self.parameters = mags[1]
+
+        self.parameters.sort()
+        self.parameters = list(k for k, _ in itertools.groupby(self.parameters))
         log.info('finished methods and parameters')
         # ----------------------------------------------------------------
         # Classes
@@ -501,6 +749,7 @@ class File:
                 log.error("Could not write to file: " + output_path)
 
         return file_obj
+
 
 class Line:
     """Stores analytics for a line.
