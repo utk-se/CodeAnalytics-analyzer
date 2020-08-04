@@ -11,8 +11,7 @@ def analyze(path, ignorefile=None):
     repo = analyzer.Repo(path, ignorefile, True)
     return repo.export()
 
-if __name__ == "__main__":
-
+def main():
     parser = argparse.ArgumentParser(description="CA-Analyzer")
     parser.add_argument('repopath', metavar='repo', type=str, help="Path to repo to analyze")
     args = parser.parse_args()
@@ -20,3 +19,6 @@ if __name__ == "__main__":
     log.info(f"Running analyzer on {args.repopath}")
     pp = pprint.PrettyPrinter()
     pp.pprint(analyze(args.repopath))
+
+if __name__ == "__main__":
+    main()
