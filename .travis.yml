@@ -1,0 +1,11 @@
+
+dist: bionic
+language: python
+
+jobs:
+  include:
+  - os: linux
+    script:
+      - python3 setup.py install
+      - ca-analyzer .
+

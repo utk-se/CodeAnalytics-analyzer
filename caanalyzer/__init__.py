@@ -10,6 +10,6 @@ Notes
 
 from cadistributor import log
 from .analyzer import Repo, File, Line
-from .__main__ import analyze
+from .__main__ import analyze, main
 
-__version__ = "0.0.6"
+__version__ = "0.0.7"

@@ -36,5 +36,10 @@ setup(
         "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
     ],
+    entry_points={
+        'console_scripts': [
+          'ca-analyzer=caanalyzer:main'
+        ]
+    },
     python_requires='>=3.6',
 )
