@@ -1,5 +1,9 @@
 import re
-from cadistributor import log
+
+
+class HandleBadPython(BaseException):
+    pass
+
 
 c_plusplus_keywords = ['asm', 'else', 'new', 'this', 'auto', 'enum', 'operator', 'throw', 'bool', 'explicit',
                        'private', 'true', 'break', 'export', 'protected', 'try', 'case', 'extern', 'public', 'typedef',
@@ -17,29 +21,89 @@ c_plusplus_ops = ['equal', 'plus', 'minus', 'star', 'slash', 'percent', 'amp', '
                   'exclaim']
 
 
-def find_ids(content, path, lang, verbose=0):
+def fullmatch(regex, string, flags=0):
+    """Emulate python-3.4 re.fullmatch()."""
+    return re.match("(?:" + regex + r")\Z", string, flags=flags)
+
+
+def handle_bad_python(path):
+    """This function is needed when building and parsing the AST doesn't work due to bad python source code"""
+    import tokenize
     id_counter = 0
     op_counter = 0
     lit_counter = 0
     ids = list()
     ops = list()
     lits = list()
-    unique_ops = set()  # list of operators with starting line and starting position
-    unique_lits = set()  # list of literals with starting line and starting position
-    unique_ids = set()  # list of identifiers with starting line and starting position
+    unique_ops = set()
+    unique_lits = set()
+    unique_ids = set()
+    with open(path, 'rb') as f:
+        tokens = tokenize.tokenize(f.readline)
+        for token in tokens:
+            if tokenize.tok_name[token.type] == 'NAME':
+                id_counter += 1
+                ids.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
+                unique_ids.add(token.string.replace('\r\n', '\n'))
+            if tokenize.tok_name[token.type] == 'STRING' or tokenize.tok_name[token.type] == 'NUMBER':
+                lit_counter += 1
+                lits.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
+                unique_lits.add(token.string.replace('\r\n', '\n'))
+            if tokenize.tok_name[token.type] == 'OP':
+                op_counter += 1
+                ops.append([token.start[0] - 1, token.end[0] - 1, token.start[1], token.end[1]])
+                unique_ops.add(token.string.replace('\r\n', '\n'))
+    return tuple([ids, unique_ids, id_counter, lits, unique_lits, lit_counter, ops, unique_ops, op_counter])
+
+
+# [starting line, ending line, starting offset, ending offset]
+def find_ids(content, path, lang, verbose=0, py2=0):
+    if not py2:
+        from cadistributor import log
+    id_counter = 0
+    op_counter = 0
+    lit_counter = 0
+    ids = list()
+    ops = list()
+    lits = list()
+    unique_ops = set()
+    unique_lits = set()
+    unique_ids = set()
 
     if lang == 'py':
         import astpretty
         import ast
-        my_ast = ast.parse(''.join(content))
-        pattern = re.compile(r".*op=.*\(\),.*")
-        pattern2 = re.compile(r".*Num\(.*\).*")
-        pattern3 = re.compile(r".*Str\(.*\).*")
-        pattern4 = re.compile(r".*Name\(.*\).*")
+        try:
+            if py2:
+                my_ast = ast.parse(content)
+            else:
+                my_ast = ast.parse(''.join(content))
+        except SyntaxError:
+            # PYTHON 2
+            if py2:
+                raise HandleBadPython
+            import subprocess
+            import os
+            python2_name = 'python2'
+            try:
+                process = subprocess.check_output([python2_name,  # python2 may not be the command on your machine
+                                                   os.path.abspath(__file__),
+                                                   ''.join(content), path, 'py', '0', '1'],
+                                                  stderr=subprocess.STDOUT)
+            except subprocess.CalledProcessError as e:
+                error = e.output.decode().split()[-1].replace('__main__.', '')
+                if error == 'HandleBadPython':
+                    return handle_bad_python(path)
+                raise RuntimeError("\ncommand '{}'\n\nreturn with error (code {}):\n{}".format(e.cmd,
+                                                                                               e.returncode,
+                                                                                               e.output.decode()))
+            p_result = eval(process.decode(errors='replace'))
+            return p_result
+        except:
+            return handle_bad_python(path)
+
         for x in range(len(my_ast.body)):
             ast_piece = astpretty.pformat(my_ast.body[x])
-            # print(ast_piece)
-            # print('#################')
             ast_piece_split = ast_piece.split('\n')
             if 'Assign(' in ast_piece:
                 for i, each in enumerate(ast_piece_split):
@@ -53,7 +117,8 @@ def find_ids(content, path, lang, verbose=0):
                                     int(ast_piece_split[i+2].strip()[11:len(ast_piece_split[i+2].strip()) - 1]) + 1])
                         unique_ops.add('=')
             for i, each in enumerate(ast_piece_split):
-                if bool(re.fullmatch(pattern4, each)):
+                # if bool(fullmatch(pattern4, each)):
+                if bool(fullmatch(r".*Name\(.*\).*", each)):
                     id_counter += 1
                     info = re.search(r".*Name\((.*)\).*", each).group(1)
                     info = info.split()
@@ -63,43 +128,40 @@ def find_ids(content, path, lang, verbose=0):
                                 int(info[1][11:len(info[1]) - 1]),
                                 int(info[1][11:len(info[1]) - 1]) + len(info[2][4:len(info[2]) - 2])])
                     unique_ids.add(info[2][4:len(info[2]) - 2])
-                if bool(re.fullmatch(pattern2, each)):
-                    lit_counter += 1
+                # if bool(fullmatch(pattern2, each)):
+                if bool(fullmatch(r".*Num\(.*\).*", each)):
                     info = re.search(r".*Num\((.*)\).*", each).group(1)
                     info = info.split(', ')
-                    # lits.append([info[2][2:], info[0][7:], info[1][11:]])
-                    lits.append([int(info[0][7:]) - 1,
-                                 int(info[0][7:]) - 1,
-                                 int(info[1][11:]),
-                                 int(info[1][11:]) + len(info[2][2:])])
-                    unique_lits.add(info[2][2:])
-                if bool(re.fullmatch(pattern3, each)):
+                    if int(info[1][11:]) >= 0:
+                        lit_counter += 1
+                        # lits.append([info[2][2:], info[0][7:], info[1][11:]])
+                        lits.append([int(info[0][7:]) - 1,
+                                     int(info[0][7:]) - 1,
+                                     int(info[1][11:]),
+                                     int(info[1][11:]) + len(info[2][2:])])
+                        unique_lits.add(info[2][2:])
+                # if bool(fullmatch(pattern3, each)):
+                if bool(fullmatch(r".*Str\(.*\).*", each)):
                     info = re.search(r".*Str\((.*)\).*", each).group(1)
-                    # print(info)
                     info_split = []
                     info_split.append(re.search("lineno=(\d+), col_offset=\-?\d+, s=.*", info).group(1))
                     info_split.append(re.search("lineno=\d+, col_offset=(\-?\d+), s=.*", info).group(1))
                     info_split.append(re.search("lineno=\d+, col_offset=\-?\d+, s=(\"|\')(.*)(\"|\')", info).group(2))
-                    # print(info_split)
-                    # print('##############')
                     # info = re.split("(, (?=(?:[^\']*\'[^\']*\')*[^\']*$))|(, (?=(?:[^\"]*\"[^\"]*\")*[^\"]*$))", info)
                     # lits.append([info[2][3:len(info[2]) - 1], info[0][7:], info[1][11:]])
-                    # print(info)
-                    # print('##############')
-                    # print(info[0][7:])
-                    # print(info[1][11:])
-                    # print(info[2][3:len(info[2]) - 1])
-                    # print('##############')
                     # lits.append([int(info[0][7:]),
                     #              int(info[0][7:]),
                     #              int(info[1][11:]),
                     #              int(info[1][11:]) + len(info[2][3:len(info[2]) - 1])])
-                    lits.append([int(info_split[0]) - 1,
-                                int(info_split[0]) - 1,
-                                int(info_split[1]),
-                                int(info_split[1]) + len(info_split[2]) - 1])
-                    unique_lits.add(info[2][3:len(info[2]) - 1])
-                if bool(re.fullmatch(pattern, each)):
+                    if int(info_split[1]) >= 0:
+                        lit_counter += 1
+                        lits.append([int(info_split[0]) - 1,
+                                    int(info_split[0]) - 1,
+                                    int(info_split[1]),
+                                    int(info_split[1]) + len(info_split[2]) - 1])
+                        unique_lits.add(info[2][3:len(info[2]) - 1])
+                # if bool(fullmatch(pattern, each)):
+                if bool(fullmatch(r".*op=.*\(\),.*", each)):
                     op_counter += 1
                     num_spaces = len(re.search("(.*)op=.*", each).group(1))
                     raw_op = ''
@@ -110,7 +172,7 @@ def find_ids(content, path, lang, verbose=0):
                     found = False
                     rev_i = i - 1
                     while not found:
-                        if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}col_offset=.*', ast_piece_split[rev_i])):
+                        if bool(fullmatch(r'\s{' + str(num_spaces) + r'}col_offset=.*', ast_piece_split[rev_i])):
                             found = True
                             # ops.append([raw_op,
                             #             ast_piece_split[rev_i - 1].strip()[7:len(ast_piece_split[rev_i - 1].strip()) - 1],
@@ -122,215 +184,225 @@ def find_ids(content, path, lang, verbose=0):
                             unique_ops.add(raw_op)
                         rev_i -= 1
 
-    elif lang == 'c':
-        from pycparser import parse_file
-        import json
-        import sys
-        import os
-        sys.path.extend(['.', '..'])
-        os.chdir(os.path.dirname(__file__))
-        RE_CHILD_ARRAY = re.compile(r'(.*)\[(.*)\]')
-        RE_INTERNAL_ATTR = re.compile('__.*__')
+    # elif lang == 'c':
+    # elif lang == 'uhhhohhhh':
+    #     from pycparser import parse_file
+    #     import json
+    #     import sys
+    #     import os
+    #     sys.path.extend(['.', '..'])
+    #     os.chdir(os.path.dirname(__file__))
+    #     RE_CHILD_ARRAY = re.compile(r'(.*)\[(.*)\]')
+    #     RE_INTERNAL_ATTR = re.compile('__.*__')
+    #
+    #     class CJsonError(Exception):
+    #         pass
+    #
+    #     def memodict(fn):
+    #         """ Fast memoization decorator for a function taking a single argument """
+    #
+    #         class memodict(dict):
+    #             def __missing__(self, key):
+    #                 ret = self[key] = fn(key)
+    #                 return ret
+    #
+    #         return memodict().__getitem__
+    #
+    #     @memodict
+    #     def child_attrs_of(klass):
+    #         """
+    #         Given a Node class, get a set of child attrs.
+    #         Memoized to avoid highly repetitive string manipulation
+    #         """
+    #         non_child_attrs = set(klass.attr_names)
+    #         all_attrs = set([i for i in klass.__slots__ if not RE_INTERNAL_ATTR.match(i)])
+    #         return all_attrs - non_child_attrs
+    #
+    #     def to_dict(node):
+    #         """ Recursively convert an ast into dict representation. """
+    #         klass = node.__class__
+    #
+    #         result = {}
+    #
+    #         # Metadata
+    #         result['_nodetype'] = klass.__name__
+    #
+    #         # Local node attributes
+    #         for attr in klass.attr_names:
+    #             result[attr] = getattr(node, attr)
+    #
+    #         # Coord object
+    #         if node.coord:
+    #             result['coord'] = str(node.coord)
+    #         else:
+    #             result['coord'] = None
+    #
+    #         # Child attributes
+    #         for child_name, child in node.children():
+    #             # Child strings are either simple (e.g. 'value') or arrays (e.g. 'block_items[1]')
+    #             match = RE_CHILD_ARRAY.match(child_name)
+    #             if match:
+    #                 array_name, array_index = match.groups()
+    #                 array_index = int(array_index)
+    #                 # arrays come in order, so we verify and append.
+    #                 result[array_name] = result.get(array_name, [])
+    #                 if array_index != len(result[array_name]):
+    #                     raise CJsonError('Internal ast error. Array {} out of order. '
+    #                                      'Expected index {}, got {}'.format(
+    #                         array_name, len(result[array_name]), array_index))
+    #                 result[array_name].append(to_dict(child))
+    #             else:
+    #                 result[child_name] = to_dict(child)
+    #
+    #         # Any child attributes that were missing need "None" values in the json.
+    #         for child_attr in child_attrs_of(klass):
+    #             if child_attr not in result:
+    #                 result[child_attr] = None
+    #
+    #         return result
+    #
+    #     def to_json(node, **kwargs):
+    #         """ Convert ast node to json string """
+    #         return json.dumps(to_dict(node), **kwargs)
+    #
+    #     if os.name == 'nt':
+    #         log.error("THIS PART MAY NOT WORK SINCE IT'S ON WINDOWS")
+    #         # ast = parse_file(os.getcwd() + "\\" + path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
+    #         ast = parse_file(path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
+    #     else:
+    #         include_path = r'-I' + os.getcwd() + r'/../fake_libc_include'
+    #         print(include_path)
+    #         # ast = parse_file(os.getcwd() + '/../example/' + path, use_cpp=True, cpp_args=include_path)
+    #         ast = parse_file(path, use_cpp=True, cpp_path='gcc', cpp_args=['-E', include_path])
+    #
+    #     pattern = re.compile(".*\"_nodetype\"\: \"Decl\".*")
+    #     pattern2 = re.compile(".*\"_nodetype\"\: \"ID\".*")
+    #     pattern3 = re.compile(".*\"_nodetype\"\: \"Constant\".*")
+    #     pattern4 = re.compile(".*\"op\"\: \".*\".*")
+    #     conv = json.loads(to_json(ast))
+    #     ast = json.dumps(conv, indent=4, sort_keys=True)
+    #     ast = str(ast)
+    #     l_ast = str(ast).split('\n')
+    #     for i, ast_line in enumerate(l_ast):
+    #         if bool(re.search(pattern, ast_line)):
+    #             id_counter += 1
+    #             num_spaces = len(re.search("(.*)\"_nodetype.*", ast_line).group(1))
+    #             regex = r'.{' + str(num_spaces) + r'}\"name\"\: \".*\".*'
+    #             location = []
+    #             raw_id = ''
+    #             for j, line in enumerate(l_ast[i + 1:]):
+    #                 if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}"coord": ".*:(\d+:\d+)".*', line)):
+    #                     location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
+    #                                             line).group(1)
+    #                 if line.strip().startswith('"init"') and line.strip() != '"init": null,':
+    #                     for init_line in l_ast[i + j + 1:]:
+    #                         if init_line.strip().startswith('"coord"'):
+    #                             init_loc = re.fullmatch(r'.*"coord": ".*:(\d+:\d+)".*', init_line).group(1)
+    #                             init_offset = int(location.split(":")[1]) + int((int(init_loc.split(":")[1]) -
+    #                                                                              int(location.split(":")[1])) / 2)
+    #                             # ops.append(['=', int(init_loc.split(":")[0]), init_offset])
+    #                             ops.append([int(init_loc.split(":")[0]), int(init_loc.split(":")[0]),
+    #                                         init_offset, init_offset + 1])
+    #                             op_counter += 1
+    #                             unique_ops.add('=')
+    #                         if init_line.strip().startswith('}'):
+    #                             break
+    #                 if bool(re.fullmatch(regex, line)):
+    #                     try:
+    #                         raw_id = re.search(r'.*\"name\"\: "(.*)".*', line).group(1)
+    #                     except AttributeError:
+    #                         raw_id = ''
+    #                     break
+    #             # ids.append([raw_id, int(location.split(":")[0]), int(location.split(":")[1])])
+    #             ids.append([int(location.split(":")[0]), int(location.split(":")[0]),
+    #                         int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_id)])
+    #             unique_ids.add(raw_id)
+    #         if bool(re.search(pattern2, ast_line)):
+    #             id_counter += 1
+    #             try:
+    #                 raw_id = re.search('.*\"name\"\: "(.*)".*', l_ast[i + 2]).group(1)
+    #             except AttributeError:
+    #                 raw_id = ''
+    #             location = re.search('.*\"coord\"\: \".*\:(\d+\:\d+)\".*', l_ast[i + 1]).group(1)
+    #             # ids.append([raw_id, int(location.split(":")[0]), int(location.split(":")[1])])
+    #             ids.append([int(location.split(":")[0]), int(location.split(":")[0]),
+    #                         int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_id)])
+    #             unique_ids.add(raw_id)
+    #         if bool(re.search(pattern3, ast_line)):
+    #             lit_counter += 1
+    #             num_spaces = len(re.search("(.*)\"_nodetype.*", ast_line).group(1))
+    #             regex = r'.{' + str(num_spaces) + r'}\"value\"\: \".*\".*'
+    #             location = []
+    #             raw_lit = ''
+    #             for line in l_ast[i + 1:]:
+    #                 if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}"coord": ".*:(\d+:\d+)".*', line)):
+    #                     location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
+    #                                             line).group(1)
+    #                 if bool(re.fullmatch(regex, line)):
+    #                     try:
+    #                         raw_lit = re.search(r'.*\"value\"\: "(.*)".*', line).group(1)
+    #                         raw_lit = raw_lit.strip()
+    #                         try:
+    #                             raw_lit = int(raw_lit)
+    #                         except ValueError:
+    #                             try:
+    #                                 raw_lit = float(raw_lit)
+    #                             except ValueError:
+    #                                 raw_lit = bytes(raw_lit, "utf-8").decode("unicode_escape")
+    #                                 raw_lit = bytes(raw_lit, "utf-8").decode("unicode_escape")
+    #                                 raw_lit = raw_lit[1:len(raw_lit) - 1]
+    #                     except AttributeError:
+    #                         raw_lit = ''
+    #                     break
+    #             # lits.append([raw_lit, int(location.split(":")[0]), int(location.split(":")[1])])
+    #             lits.append([int(location.split(":")[0]), int(location.split(":")[0]),
+    #                          int(location.split(":")[1]), int(location.split(":")[1]) + len(str(raw_lit))])
+    #             unique_lits.add(raw_lit)
+    #         if bool(re.search(pattern4, ast_line)):
+    #             op_counter += 1
+    #             raw_op = ''
+    #             try:
+    #                 raw_op = re.search(r'.*\"op\"\: "(.*)".*', ast_line).group(1)
+    #             except AttributeError as e:
+    #                 log.error(e)
+    #                 pass
+    #             num_spaces = len(re.search("(.*)\"op.*", ast_line).group(1))
+    #             regex = r'.{' + str(num_spaces) + r'}\"coord\"\: \".*\".*'
+    #             location = []
+    #             found = False
+    #             rev_i = i - 1
+    #             while not found:
+    #                 if bool(re.fullmatch(regex, l_ast[rev_i])):
+    #                     location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
+    #                                             l_ast[rev_i]).group(1)
+    #                     found = True
+    #                 rev_i -= 1
+    #             # ops.append([raw_op, int(location.split(":")[0]), int(location.split(":")[1])])
+    #             ops.append([int(location.split(":")[0]), int(location.split(":")[0]),
+    #                         int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_op)])
+    #             unique_ops.add(raw_op)
 
-        class CJsonError(Exception):
-            pass
-
-        def memodict(fn):
-            """ Fast memoization decorator for a function taking a single argument """
-
-            class memodict(dict):
-                def __missing__(self, key):
-                    ret = self[key] = fn(key)
-                    return ret
-
-            return memodict().__getitem__
-
-        @memodict
-        def child_attrs_of(klass):
-            """
-            Given a Node class, get a set of child attrs.
-            Memoized to avoid highly repetitive string manipulation
-            """
-            non_child_attrs = set(klass.attr_names)
-            all_attrs = set([i for i in klass.__slots__ if not RE_INTERNAL_ATTR.match(i)])
-            return all_attrs - non_child_attrs
-
-        def to_dict(node):
-            """ Recursively convert an ast into dict representation. """
-            klass = node.__class__
-
-            result = {}
-
-            # Metadata
-            result['_nodetype'] = klass.__name__
-
-            # Local node attributes
-            for attr in klass.attr_names:
-                result[attr] = getattr(node, attr)
-
-            # Coord object
-            if node.coord:
-                result['coord'] = str(node.coord)
-            else:
-                result['coord'] = None
-
-            # Child attributes
-            for child_name, child in node.children():
-                # Child strings are either simple (e.g. 'value') or arrays (e.g. 'block_items[1]')
-                match = RE_CHILD_ARRAY.match(child_name)
-                if match:
-                    array_name, array_index = match.groups()
-                    array_index = int(array_index)
-                    # arrays come in order, so we verify and append.
-                    result[array_name] = result.get(array_name, [])
-                    if array_index != len(result[array_name]):
-                        raise CJsonError('Internal ast error. Array {} out of order. '
-                                         'Expected index {}, got {}'.format(
-                            array_name, len(result[array_name]), array_index))
-                    result[array_name].append(to_dict(child))
-                else:
-                    result[child_name] = to_dict(child)
-
-            # Any child attributes that were missing need "None" values in the json.
-            for child_attr in child_attrs_of(klass):
-                if child_attr not in result:
-                    result[child_attr] = None
-
-            return result
-
-        def to_json(node, **kwargs):
-            """ Convert ast node to json string """
-            return json.dumps(to_dict(node), **kwargs)
-
-        if os.name == 'nt':
-            log.error("THIS PART MAY NOT WORK SINCE IT'S ON WINDOWS")
-            # ast = parse_file(os.getcwd() + "\\" + path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
-            ast = parse_file(path, use_cpp=True, cpp_args=r'-Ifake_libc_include')
-        else:
-            include_path = r'-I' + os.getcwd() + r'/../fake_libc_include'
-            # ast = parse_file(os.getcwd() + '/../example/' + path, use_cpp=True, cpp_args=include_path)
-            ast = parse_file(path, use_cpp=True, cpp_args=include_path)
-
-        pattern = re.compile(".*\"_nodetype\"\: \"Decl\".*")
-        pattern2 = re.compile(".*\"_nodetype\"\: \"ID\".*")
-        pattern3 = re.compile(".*\"_nodetype\"\: \"Constant\".*")
-        pattern4 = re.compile(".*\"op\"\: \".*\".*")
-        conv = json.loads(to_json(ast))
-        ast = json.dumps(conv, indent=4, sort_keys=True)
-        ast = str(ast)
-        l_ast = str(ast).split('\n')
-        for i, ast_line in enumerate(l_ast):
-            if bool(re.search(pattern, ast_line)):
-                id_counter += 1
-                num_spaces = len(re.search("(.*)\"_nodetype.*", ast_line).group(1))
-                regex = r'.{' + str(num_spaces) + r'}\"name\"\: \".*\".*'
-                location = []
-                raw_id = ''
-                for j, line in enumerate(l_ast[i + 1:]):
-                    if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}"coord": ".*:(\d+:\d+)".*', line)):
-                        location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
-                                                line).group(1)
-                    if line.strip().startswith('"init"') and line.strip() != '"init": null,':
-                        for init_line in l_ast[i + j + 1:]:
-                            if init_line.strip().startswith('"coord"'):
-                                init_loc = re.fullmatch(r'.*"coord": ".*:(\d+:\d+)".*', init_line).group(1)
-                                init_offset = int(location.split(":")[1]) + int((int(init_loc.split(":")[1]) -
-                                                                                 int(location.split(":")[1])) / 2)
-                                # ops.append(['=', int(init_loc.split(":")[0]), init_offset])
-                                ops.append([int(init_loc.split(":")[0]), int(init_loc.split(":")[0]),
-                                            init_offset, init_offset + 1])
-                                op_counter += 1
-                                unique_ops.add('=')
-                            if init_line.strip().startswith('}'):
-                                break
-                    if bool(re.fullmatch(regex, line)):
-                        try:
-                            raw_id = re.search(r'.*\"name\"\: "(.*)".*', line).group(1)
-                        except AttributeError:
-                            raw_id = ''
-                        break
-                # ids.append([raw_id, int(location.split(":")[0]), int(location.split(":")[1])])
-                ids.append([int(location.split(":")[0]), int(location.split(":")[0]),
-                            int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_id)])
-                unique_ids.add(raw_id)
-            if bool(re.search(pattern2, ast_line)):
-                id_counter += 1
-                try:
-                    raw_id = re.search('.*\"name\"\: "(.*)".*', l_ast[i + 2]).group(1)
-                except AttributeError:
-                    raw_id = ''
-                location = re.search('.*\"coord\"\: \".*\:(\d+\:\d+)\".*', l_ast[i + 1]).group(1)
-                # ids.append([raw_id, int(location.split(":")[0]), int(location.split(":")[1])])
-                ids.append([int(location.split(":")[0]), int(location.split(":")[0]),
-                            int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_id)])
-                unique_ids.add(raw_id)
-            if bool(re.search(pattern3, ast_line)):
-                lit_counter += 1
-                num_spaces = len(re.search("(.*)\"_nodetype.*", ast_line).group(1))
-                regex = r'.{' + str(num_spaces) + r'}\"value\"\: \".*\".*'
-                location = []
-                raw_lit = ''
-                for line in l_ast[i + 1:]:
-                    if bool(re.fullmatch(r'\s{' + str(num_spaces) + r'}"coord": ".*:(\d+:\d+)".*', line)):
-                        location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
-                                                line).group(1)
-                    if bool(re.fullmatch(regex, line)):
-                        try:
-                            raw_lit = re.search(r'.*\"value\"\: "(.*)".*', line).group(1)
-                            raw_lit = raw_lit.strip()
-                            try:
-                                raw_lit = int(raw_lit)
-                            except ValueError:
-                                try:
-                                    raw_lit = float(raw_lit)
-                                except ValueError:
-                                    raw_lit = bytes(raw_lit, "utf-8").decode("unicode_escape")
-                                    raw_lit = bytes(raw_lit, "utf-8").decode("unicode_escape")
-                                    raw_lit = raw_lit[1:len(raw_lit) - 1]
-                        except AttributeError:
-                            raw_lit = ''
-                        break
-                # lits.append([raw_lit, int(location.split(":")[0]), int(location.split(":")[1])])
-                lits.append([int(location.split(":")[0]), int(location.split(":")[0]),
-                             int(location.split(":")[1]), int(location.split(":")[1]) + len(str(raw_lit))])
-                unique_lits.add(raw_lit)
-            if bool(re.search(pattern4, ast_line)):
-                op_counter += 1
-                raw_op = ''
-                try:
-                    raw_op = re.search(r'.*\"op\"\: "(.*)".*', ast_line).group(1)
-                except AttributeError as e:
-                    log.error(e)
-                    pass
-                num_spaces = len(re.search("(.*)\"op.*", ast_line).group(1))
-                regex = r'.{' + str(num_spaces) + r'}\"coord\"\: \".*\".*'
-                location = []
-                found = False
-                rev_i = i - 1
-                while not found:
-                    if bool(re.fullmatch(regex, l_ast[rev_i])):
-                        location = re.fullmatch(r'\s{' + str(num_spaces) + r'}\"coord\"\: \".*\:(\d+\:\d+)\".*',
-                                                l_ast[rev_i]).group(1)
-                        found = True
-                    rev_i -= 1
-                # ops.append([raw_op, int(location.split(":")[0]), int(location.split(":")[1])])
-                ops.append([int(location.split(":")[0]), int(location.split(":")[0]),
-                            int(location.split(":")[1]), int(location.split(":")[1]) + len(raw_op)])
-                unique_ops.add(raw_op)
-
-    elif lang == 'cpp':
+    # elif lang == 'cpp':
+    elif lang == 'cpp' or lang == 'c' or lang == 'h':
         import subprocess
         import os
-        # cwd = os.path.dirname(__file__)
+        import shlex
         if os.name != 'nt':
             filename = path
         else:
             log.error("IF WE HAVE TO RUN THIS ON WINDOWS THEN I'LL HAVE TO FIX THIS PART")
-        cmd = 'clang++ -cc1 -std=c++11 -stdlib=libstdc++ -I/usr/include/c++/7 -I/usr/include/c++/7.5.0 -I/usr/include/x86_64-linux-gnu/c++/7 -I/usr/include/x86_64-linux-gnu/c++/7.5.0 -dump-raw-tokens ' + filename + ' 2>&1'
-        p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
-        p.wait()
-        (ast_str, err) = p.communicate()
-        ast_str = ast_str.decode('utf-8')
+        if lang == 'cpp':
+            cmd = 'clang++ -cc1 -std=c++11 -stdlib=libstdc++ -I/usr/include/c++/7 -I/usr/include/c++/7.5.0 -I/usr/include/x86_64-linux-gnu/c++/7 -I/usr/include/x86_64-linux-gnu/c++/7.5.0 -dump-raw-tokens ' + filename
+            p = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+            # p = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+            # p.wait()
+            # (ast_str, err) = p.communicate()
+            # ast_str = ast_str.stdout.decode()
+            # p = subprocess.check_output(cmd)
+        else:
+            cmd = 'clang -cc1 -dump-raw-tokens "' + filename + '"'
+            p = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
+        ast_str = p.decode(errors='replace')
         if ast_str.startswith("error"):
             log.error(ast_str)
         l_ast = ast_str.split('\n')
@@ -338,8 +410,8 @@ def find_ids(content, path, lang, verbose=0):
             if ast_line.startswith(tuple(c_plusplus_ops)):
                 raw_op = ast_line.split()[1][1:len(ast_line.split()[1]) - 1]
                 op_counter += 1
-                if bool(re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line)):
-                    location = re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line).group(1)
+                if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
+                    location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                     # ops.append([raw_op, int(location.split(':')[0]), int(location.split(':')[1])])
                     ops.append([int(location.split(':')[0]), int(location.split(':')[0]),
                                 int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_op)])
@@ -347,8 +419,8 @@ def find_ids(content, path, lang, verbose=0):
             if ast_line.startswith('numeric_constant') or ast_line.startswith('string_literal'):
                 raw_lit = ast_line.split()[1][1:len(ast_line.split()[1]) - 1]
                 lit_counter += 1
-                if bool(re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line)):
-                    location = re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line).group(1)
+                if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
+                    location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                     # lits.append([raw_lit, int(location.split(':')[0]), int(location.split(':')[1])])
                     lits.append([int(location.split(':')[0]), int(location.split(':')[0]),
                                  int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_lit)])
@@ -360,8 +432,8 @@ def find_ids(content, path, lang, verbose=0):
                     raw_id = ''
                 if raw_id == "'true'" or raw_id == "'false'":
                     lit_counter += 1
-                    if bool(re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line)):
-                        location = re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line).group(1)
+                    if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
+                        location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                         # lits.append([raw_id, int(location.split(':')[0]), int(location.split(':')[1])])
                         lits.append([int(location.split(':')[0]), int(location.split(':')[0]),
                                      int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_id)])
@@ -369,8 +441,8 @@ def find_ids(content, path, lang, verbose=0):
                 if raw_id not in c_plusplus_keywords:
                     id_counter += 1
                     # find line location
-                    if bool(re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line)):
-                        location = re.search(r"Loc\=\<.*\.cpp\:(.*)\>", ast_line).group(1)
+                    if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
+                        location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                         # ids.append([raw_id, int(location.split(':')[0]), int(location.split(':')[1])])
                         ids.append([int(location.split(':')[0]), int(location.split(':')[0]),
                                     int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_id)])
@@ -383,27 +455,27 @@ def find_ids(content, path, lang, verbose=0):
                   '&=', '|=', '^=', ',', '+', '-', '*', '**', '/', '%', '++', '--', '<<', '>>', '>>>', '&',
                   '|', '^', '!', '~', '&&', '||', '?', ':', '===', '==', '>=',
                   '<=', '<', '>', '!=', '!==']
-        items = list(esprima.tokenize(''.join(content), options={'loc': True}))
+        items = list(esprima.tokenize(''.join(content), options={'loc': True, 'tolerant': True}))
         for each in items:
             if each.type == 'Identifier':
                 id_counter += 1
                 # ids.append([each.value, [each.loc.start.line, each.loc.end.line],
                 #             each.loc.start.column, each.loc.end.column])
-                ids.append([each.loc.start.line, each.loc.end.line,
+                ids.append([each.loc.start.line-1, each.loc.end.line-1,
                             each.loc.start.column, each.loc.end.column])
                 unique_ids.add(each.value)
             if each.type == 'Punctuator' and each.value in js_ops:
                 op_counter += 1
                 # ops.append([each.value, [each.loc.start.line, each.loc.end.line],
                 #             each.loc.start.column, each.loc.end.column])
-                ops.append([each.loc.start.line, each.loc.end.line,
+                ops.append([each.loc.start.line-1, each.loc.end.line-1,
                             each.loc.start.column, each.loc.end.column])
                 unique_ops.add(each.value)
             if each.type == 'String' or each.type == 'Numeric':
                 lit_counter += 1
                 # lits.append([each.value, [each.loc.start.line, each.loc.end.line],
                 #              each.loc.start.column, each.loc.end.column])
-                lits.append([each.loc.start.line, each.loc.end.line,
+                lits.append([each.loc.start.line-1, each.loc.end.line-1,
                             each.loc.start.column, each.loc.end.column])
                 unique_lits.add(each.value)
 
@@ -465,3 +537,10 @@ def find_ids(content, path, lang, verbose=0):
     # return all above in a tuple in the same order printed above without unique count since
     # it can be obtained by calling len()
     return tuple([ids, unique_ids, id_counter, lits, unique_lits, lit_counter, ops, unique_ops, op_counter])
+
+
+if __name__ == "__main__":
+    import sys
+    sys.path.append('..')
+    print(find_ids(content=sys.argv[1], path=sys.argv[2], lang=sys.argv[3],
+                   verbose=int(sys.argv[4]), py2=int(sys.argv[5])))

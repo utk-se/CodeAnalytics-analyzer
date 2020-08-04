@@ -1,8 +1,9 @@
 """Analyzes the shape of code within the current directory."""
 
-# from bson.json_util import loads, dumps
+import sys
+import argparse
+sys.path.append('..')
 from cadistributor import log
-# from .analyzer import Repo
 from caanalyzer import analyzer
 import pprint
 
@@ -11,6 +12,11 @@ def analyze(path, ignorefile=None):
     return repo.export()
 
 if __name__ == "__main__":
-    log.info("Running analyzer")
+
+    parser = argparse.ArgumentParser(description="CA-Analyzer")
+    parser.add_argument('repopath', metavar='repo', type=str, help="Path to repo to analyze")
+    args = parser.parse_args()
+
+    log.info(f"Running analyzer on {args.repopath}")
     pp = pprint.PrettyPrinter()
-    pp.pprint(analyze("."))
+    pp.pprint(analyze(args.repopath))
