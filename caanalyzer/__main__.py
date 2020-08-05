@@ -21,4 +21,5 @@ def main():
     pp.pprint(analyze(args.repopath))
 
 if __name__ == "__main__":
-    main()
+    analyze(sys.argv[1])
+    #main()

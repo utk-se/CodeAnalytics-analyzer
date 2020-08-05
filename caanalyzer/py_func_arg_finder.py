@@ -51,15 +51,23 @@ def find_methods_and_args(p_children, f_lines):
                                 #    print(lines[latest_pos[0]-1+i][latest_pos[1]:])
                                 #    print(one_broken)
                             else:
-                                #try:
-                                result = lines[latest_pos[0]-1+i].find(one_broken)
-                                # except IndexError:
-                                #     print('|||||||||')
-                                #     print(latest_pos)
-                                #     print(one_broken)
-                                #     print(latest_pos[0]-1+i)
-                                #     print(lines[latest_pos[0]-1+i])
-                                #     exit()
+                                try:
+                                    result = lines[latest_pos[0]-1+i].find(one_broken)
+                                except IndexError:
+                                    if lines[latest_pos[0]-1].find(one_broken) != -1:
+                                        # not a function
+                                        return []
+                                    raise IndexError
+                                    # # print(node)
+                                    # # print('|||||||||')
+                                    # print(lines[latest_pos[0] - 1][latest_pos[1]:])
+                                    # print(one_broken)
+                                    # print(latest_pos)
+                                    # print(i)
+                                    # # print(one_broken)
+                                    # print(latest_pos[0]-1)
+                                    # # print(lines[latest_pos[0]-1+i])
+                                    # exit()
                             if result == -1:
                                 i += 1
                                 first = False
@@ -90,7 +98,7 @@ def find_methods_and_args(p_children, f_lines):
     def get_methods_and_args(children, lines):
         for one in children:
             if (str(type(one)).split('.')[-1][:-2] == 'PythonNode' and one.type == 'atom_expr') or \
-            one.type == 'funcdef':
+               one.type == 'funcdef':
                 node = str(one).lstrip('PythonNode(atom_expr, ').rstrip(')')
                 if one.type == 'funcdef':
                     params = get_params(one.get_params())
@@ -113,11 +121,13 @@ def find_methods_and_args(p_children, f_lines):
                         #    exit()
                 else:
                     #print(node)
-                    #try:
+                    # try:
                     broken_nodes = break_s(node, lines)
-                    #except IndexError:
-                    #    print(one)
-                    #    exit()
+                    if not broken_nodes:
+                        continue
+                    # except IndexError:
+                    #     print(one)
+                    #     exit()
                     #print(broken_nodes)
                     level = 0
                     for i, each_node in enumerate(broken_nodes):
