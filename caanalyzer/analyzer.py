@@ -43,6 +43,17 @@ ESC_SEP = re.escape(os.sep)
 
 pp = pprint.PrettyPrinter()
 
+
+def count_newlines(string, char_offset):
+    ret = 0
+    while char_offset >= 0:
+        if string[char_offset] == '\n' and string[:char_offset].count('"') % 2 == 0\
+                and string[:char_offset].count("'") % 2 == 0:
+            ret += 1
+        char_offset -= 1
+    return ret
+
+
 class Repo:
     """Generates analytics for a code repository.
 
@@ -321,8 +332,8 @@ class File:
         Total number of code tokens within the file.
     """
 
-    # helper function
-    def lizard_broken(self, lines, ext, path):
+    # helper functions
+    def lizard_broken(self, lines, ext, func_list):
         def sub_entire_line(string):
             while 1:
                 try:
@@ -388,20 +399,180 @@ class File:
                             js_find_locs(v_one)
                 elif isinstance(value, dict):
                     js_find_locs(value)
-        '''
+
         if ext == 'c' or ext == 'h':
-            cmd = 'clang -Xclang -ast-dump -fsyntax-only "' + path + '"'
-            p = subprocess.check_output(shlex.split(cmd), stderr=subprocess.STDOUT)
-            ast_str = p.decode(errors='replace')
-            if ast_str.startswith("error"):
-                log.error(ast_str)
-            l_ast = ast_str.split('\n')
-            for ast_line in l_ast:
-                print(ast_line)
-            exit()
-        '''
-        #elif ext == 'js':
-        if ext == 'js':
+            func_start = re.compile(r'(?!\b(if|while|for)\b)(\b\w+\s*\()', re.DOTALL)
+            in_comment = False
+            already_found = []
+            for liz_func in func_list:
+                already_found.append((liz_func.unqualified_name, liz_func.__dict__["start_line"] - 1))
+            for i, line in enumerate(lines):
+                matches = list(func_start.finditer(line))
+                for match in matches:
+                    if (match.group(0)[:-1], i) in already_found:
+                        continue
+                    # if match.group(0)[:-1] == liz_func.unqualified_name \
+                    #         and i == liz_func.__dict__["start_line"] - 1:
+                    #     print('lizard already found', match.group(0)[:-1], 'on line', i)
+                    #     continue
+                    end_block_offset = 0
+                    # found // before func
+                    if line.find('//') != -1 \
+                            and match.start() > line.find('//')+2 \
+                            and (line[:line.find('//')+2].count('"') -
+                                 line[:line.find('//')+2].count(r'\"')) % 2 == 0:
+                        continue
+                    # found /* before func
+                    if line.find('/*') != -1 \
+                            and match.start() > line.find('/*')+2 \
+                            and (line[:line.find('/*')+2].count('"') -
+                                 line[:line.find('/*')+2].count(r'\"')) % 2 == 0:
+                        in_comment = True
+                    # found */ before func
+                    if line.find('*/') != -1 and in_comment and match.start() > line.find('*/')+2:
+                        in_comment = False
+                        end_block_offset = line.find('*/')
+                    if not in_comment:
+                        if (line[end_block_offset:match.start()].count('"') -
+                           line[end_block_offset:match.start()].count(r'\"')) % 2 == 0:
+                            # found valid func
+                            # search for last right paren
+                            first_line = True
+                            done = False
+                            lc = 1
+                            rc = 0
+                            for j, func_line in enumerate(lines[i:]):
+                                if done:
+                                    break
+                                if first_line:
+                                    for k, func_char in enumerate(func_line[match.start()+len(match.group(0)):]):
+                                        if func_char == '(' and \
+                                                (func_line[:match.start()+len(match.group(0))+k].count('"') -
+                                                 func_line[:match.start()+len(match.group(0))+k].count(r'\"')) % 2 == 0:
+                                            lc += 1
+                                        elif func_char == ')' and \
+                                                (func_line[:match.start()+len(match.group(0))+k].count('"') -
+                                                 func_line[:match.start()+len(match.group(0))+k].count(r'\"')) % 2 == 0:
+                                            rc += 1
+                                        if lc == rc:
+                                            self.methods.append([i, i, match.start(),
+                                                                 match.start()+len(match.group(0))+k])
+                                            done = True
+                                            break
+                                    first_line = False
+                                else:
+                                    for k, func_char in enumerate(func_line):
+                                        if func_char == '(' and \
+                                                (func_line[:k].count('"') -
+                                                 func_line[:k].count(r'\"')) % 2 == 0:
+                                            lc += 1
+                                        elif func_char == ')' and \
+                                                (func_line[:k].count('"') -
+                                                 func_line[:k].count(r'\"')) % 2 == 0:
+                                            rc += 1
+                                        if lc == rc:
+                                            start_offsets = []
+                                            end_offsets = []
+                                            start_offsets.append(match.start())
+                                            for inner in lines[i+1:i+j+1]:
+                                                start_offsets.append(len(inner) - len(inner.lstrip()))
+                                            for inner in lines[i:i+j]:
+                                                end_offsets.append(len(inner))
+                                            end_offsets.append(k)
+                                            self.methods.append([i, i+j, start_offsets, end_offsets])
+                                            done = True
+                                            break
+                if line.find('/*') != -1 and line[:line.find('/*')+2].count('"') % 2 == 0:
+                    in_comment = True
+                if line.find('*/') != -1 and in_comment:
+                    in_comment = False
+            for s, e, so, eo in self.methods:
+                if s == e:
+                    arg_l = lines[e][so:eo+1].split(',')
+                    arg_l[0] = arg_l[0][arg_l[0].find('(')+1:]
+                    for arg in range(len(arg_l)):
+                        arg_l[arg] = arg_l[arg].strip().rstrip(',')
+                    arg_l[-1] = arg_l[-1][:-1]
+                    just_args = lines[e][so:eo+1][lines[e][so:eo+1].find('(')+1:-1]
+                    while '' in arg_l:
+                        arg_l.remove('')
+                    for arg in arg_l:
+                        param = (e, lines[e].find(just_args)+just_args.find(arg),
+                                 lines[e].find(just_args)+just_args.find(arg)+len(arg))
+                        mov = just_args.find(arg) + 1
+                        while param in self.parameters:
+                            param = (e, lines[e].find(just_args)+mov,
+                                     lines[e].find(just_args)+mov+len(arg))
+                            mov += 1
+                        self.parameters.append(param)
+                else:
+                    cpy_lines = lines[:]
+                    cpy_lines[e] = cpy_lines[e][:eo[-1]+1]
+                    func = str(''.join(cpy_lines[s:e + 1]))[so[0]:].strip()
+                    # if func == '':
+                    #     continue
+                    # build_str = ''
+                    # for i_char, char in enumerate(func):
+                    #     if char == '{' and (func[:i_char].count('"') -
+                    #                         func[:i_char].count(r'\"')) % 2 == 0:
+                    #         break
+                    #     build_str += char
+                    arg_pat = re.compile(r'\b\w+\s*\((.*)\)', re.DOTALL)
+                    matches = list(arg_pat.finditer(func))
+                    max_len = 0
+                    final_match = None
+                    if len(matches) == 1 and len(matches[0].group(1)) == 0:
+                        continue
+                    for match in matches:
+                        no_params = False
+                        lc = 0
+                        rc = 0
+                        actual_match = match.group(1)
+                        for i_char, char in enumerate(match.group(1)):
+                            if (match.group(1)[:i_char].count('"') -
+                               match.group(1)[:i_char].count(r'\"')) % 2 == 0:
+                                if char == '(':
+                                    lc += 1
+                                elif char == ')':
+                                    rc += 1
+                                if rc > lc:
+                                    if match.group(1)[:i_char] == '':
+                                        no_params = True
+                                        break
+                                    actual_match = match.group(1)[:i_char]
+                                    break
+                        if no_params:
+                            break
+                        if lc <= rc:
+                            if len(actual_match) > max_len:
+                                max_len = len(actual_match)
+                                final_match = actual_match
+                    if no_params:
+                        continue
+                    arg_l = [k.strip() for k in final_match.split(',')]
+                    for arg in arg_l:
+                        all_func = str(''.join(lines[s:e + 1]))
+                        pos = all_func.find(func)
+                        pos += func.find(arg)
+                        num_news_before_arg = count_newlines(all_func[:pos], pos-1)
+                        num_news_in_arg = count_newlines(all_func[pos:pos+len(arg)], len(arg)-1)
+                        l = num_news_before_arg + s
+                        if num_news_in_arg == 0:
+                            self.parameters.append((l,
+                                                    lines[l].find(arg),
+                                                    lines[l].find(arg)+len(arg)))
+                        else:
+                            ls = list(range(l, l+num_news_in_arg+1))
+                            start_offsets = []
+                            end_offsets = []
+                            start_offsets.append(lines[l].find(all_func[pos:pos+len(arg)].split('\n')[0]))
+                            for one in lines[l+1:l+num_news_in_arg+1]:
+                                start_offsets.append(len(one)-len(one.lstrip()))
+                            for one in lines[l:l+num_news_in_arg]:
+                                end_offsets.append(len(one))
+                            end_offsets.append(len(all_func[pos:pos+len(arg)].split('\n')[-1]))
+                            self.parameters.append((ls, start_offsets, end_offsets))
+        elif ext == 'js':
             try:
                 items = esprima.parse(''.join(lines), options={'loc': True, 'tolerant': True})
             except esprima.Error:
@@ -559,7 +730,6 @@ class File:
         self.literals   = []
         self.operators  = []
 
-        lines = []
         log.info(file_path)
 
         try:
@@ -595,30 +765,38 @@ class File:
         # ----------------------------------------------------------------
         # Methods and Paramaters
         # ----------------------------------------------------------------
-        def count_newlines(string, char_offset):
-            char_index = char_offset
-            ret = 0
-            while char_index >= 0:
-                if string[char_index] == '\n':
-                    ret += 1
-                char_index -= 1
-            return ret
-
-        #if file_ext == 'js' or file_ext == 'c' or file_ext == 'h':
         if file_ext == 'js':
-            self.lizard_broken(lines, file_ext, file_path)
+            self.lizard_broken(lines, file_ext, [])
         elif file_ext != 'py':
             for func in analysis.function_list:
-                start_index = func.__dict__["start_line"] - 1
-                length      = len(lines[start_index])
-                lead_wspace = length - len(lines[start_index].lstrip())
-
-                method = (start_index, func.__dict__["end_line"] - 1,
-                          lead_wspace, length)
-                self.methods.append(method)
+                start_line = func.__dict__["start_line"] - 1
+                end_line = func.__dict__["end_line"] - 1
+                if start_line == end_line:
+                    self.methods.append((start_line, end_line,
+                                         len(lines[start_line]) - len(lines[start_line].lstrip()),
+                                         len(lines[start_line])))
+                else:
+                    start_offsets = []
+                    end_offsets = []
+                    tic = 0
+                    while 1:
+                        if lines[start_line][tic:lines[start_line].find(func.unqualified_name+'(')].count('"') % 2 == 0:
+                            start_offsets.append(lines[start_line].find(func.unqualified_name+'('))
+                            break
+                        else:
+                            tic += 1
+                    for inner in lines[start_line+1:end_line+1]:
+                        start_offsets.append(len(inner) - len(inner.lstrip()))
+                    for inner in lines[start_line:end_line+1]:
+                        end_offsets.append(len(inner))
+                    if sum(1 for num in start_offsets if num < 0) > 0 or sum(1 for num in end_offsets if num < 0) > 0:
+                        continue
+                    self.methods.append((start_line, end_line, start_offsets, end_offsets))
 
                 # parameter format: (line num, offset, end offset)
-                i = start_index
+                i = start_line
+                if file_ext == 'c' or file_ext == 'h':
+                    func.full_parameters = []
                 for param in func.full_parameters:
                     param = param.lstrip('\\').lstrip().lstrip('\\').lstrip()
                     param_split = [re.escape(one)+r'\s*(<.*>)*(\(.*\))*' for one in param.split()]
@@ -626,7 +804,7 @@ class File:
                     # Match and determine span of parameter in line
                     m = re.compile(r"\(?(.+,\s*)*({})\s*(\/\*.*\*\/\s*)*\s*([,:=].*|.*\)|\/\*.*)".format(p), re.DOTALL)
                     spans_multiple_lines = False
-                    start_l = start_index
+                    start_l = start_line
                     start_offset = 0
                     end_l = func.__dict__["end_line"] - 1
                     end_offset = 0
@@ -636,16 +814,16 @@ class File:
                             match = m.search(lines[i])
                         except IndexError:
                             spans_multiple_lines = True
-                            func_lines = [func_line for func_line in lines[start_index:func.__dict__["end_line"]]]
+                            func_lines = [func_line for func_line in lines[start_line:func.__dict__["end_line"]]]
                             func_lines = ''.join(func_lines)
                             match = m.search(func_lines)
                             if match is None:
                                 fixed_at_error = self.lizard_broken(lines, file_ext)
                                 break
                             else:
-                                start_l = start_index + count_newlines(func_lines, match.start(2))
+                                start_l = start_line + count_newlines(func_lines, match.start(2))
                                 start_offset = match.start(2)
-                                end_l = start_index + count_newlines(func_lines, match.end(2))
+                                end_l = start_line + count_newlines(func_lines, match.end(2))
                                 sum_lengths = 0
                                 for param_line in lines[start_l:end_l]:
                                     sum_lengths += len(param_line)
@@ -670,8 +848,10 @@ class File:
                         self.parameters.append(parameter)
                     elif not fixed_at_error:
                         offset = match.span(2)
-                        parameter = (start_index, offset[0], offset[1]-1)
+                        parameter = (start_line, offset[0], offset[1]-1)
                         self.parameters.append(parameter)
+            if file_ext == 'c' or file_ext == 'h':
+                self.lizard_broken(lines, file_ext, analysis.function_list)
         else:
             with open(file_path, errors='replace') as s:
                 parser = parso.parse(s.read())
@@ -679,8 +859,8 @@ class File:
                 self.methods = mags[0]
                 self.parameters = mags[1]
 
-        self.parameters.sort()
-        self.parameters = list(k for k, _ in itertools.groupby(self.parameters))
+        #self.parameters.sort()
+        #self.parameters = list(k for k, _ in itertools.groupby(self.parameters))
         log.info('finished methods and parameters')
         # ----------------------------------------------------------------
         # Classes

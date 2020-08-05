@@ -413,8 +413,8 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                 if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
                     location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                     # ops.append([raw_op, int(location.split(':')[0]), int(location.split(':')[1])])
-                    ops.append([int(location.split(':')[0]), int(location.split(':')[0]),
-                                int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_op)])
+                    ops.append([int(location.split(':')[0])-1, int(location.split(':')[0])-1,
+                                int(location.split(':')[1])-1, int(location.split(':')[1]) + len(raw_op)-1])
                     unique_ops.add(raw_op)
             if ast_line.startswith('numeric_constant') or ast_line.startswith('string_literal'):
                 raw_lit = ast_line.split()[1][1:len(ast_line.split()[1]) - 1]
@@ -422,8 +422,8 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                 if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
                     location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                     # lits.append([raw_lit, int(location.split(':')[0]), int(location.split(':')[1])])
-                    lits.append([int(location.split(':')[0]), int(location.split(':')[0]),
-                                 int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_lit)])
+                    lits.append([int(location.split(':')[0])-1, int(location.split(':')[0])-1,
+                                 int(location.split(':')[1])-1, int(location.split(':')[1]) + len(raw_lit)-1])
                     unique_lits.add(raw_lit)
             if bool(re.search(r"raw\_identifier.*", ast_line)):
                 try:
@@ -435,8 +435,8 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                     if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
                         location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                         # lits.append([raw_id, int(location.split(':')[0]), int(location.split(':')[1])])
-                        lits.append([int(location.split(':')[0]), int(location.split(':')[0]),
-                                     int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_id)])
+                        lits.append([int(location.split(':')[0])-1, int(location.split(':')[0])-1,
+                                     int(location.split(':')[1])-1, int(location.split(':')[1]) + len(raw_id)-1])
                         unique_lits.add(raw_id)
                 if raw_id not in c_plusplus_keywords:
                     id_counter += 1
@@ -444,8 +444,8 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                     if bool(re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line)):
                         location = re.search(r"Loc\=\<.*\.{}\:(.*)\>".format(lang), ast_line).group(1)
                         # ids.append([raw_id, int(location.split(':')[0]), int(location.split(':')[1])])
-                        ids.append([int(location.split(':')[0]), int(location.split(':')[0]),
-                                    int(location.split(':')[1]), int(location.split(':')[1]) + len(raw_id)])
+                        ids.append([int(location.split(':')[0])-1, int(location.split(':')[0])-1,
+                                    int(location.split(':')[1])-1, int(location.split(':')[1]) + len(raw_id)-1])
                         unique_ids.add(raw_id)
 
     # format: [id/lit/op, [start line, end line], [start offset, end offset]]
