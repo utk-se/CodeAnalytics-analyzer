@@ -400,7 +400,7 @@ class File:
                 elif isinstance(value, dict):
                     js_find_locs(value)
 
-        if ext == 'c' or ext == 'h':
+        if ext == 'c' or ext == 'h' or ext == 'cpp':
             func_start = re.compile(r'(?!\b(if|while|for)\b)(\b\w+\s*\()', re.DOTALL)
             in_comment = False
             already_found = []
@@ -795,7 +795,7 @@ class File:
 
                 # parameter format: (line num, offset, end offset)
                 i = start_line
-                if file_ext == 'c' or file_ext == 'h':
+                if file_ext == 'c' or file_ext == 'h' or file_ext == 'cpp':
                     func.full_parameters = []
                 for param in func.full_parameters:
                     param = param.lstrip('\\').lstrip().lstrip('\\').lstrip()
@@ -850,7 +850,7 @@ class File:
                         offset = match.span(2)
                         parameter = (start_line, offset[0], offset[1]-1)
                         self.parameters.append(parameter)
-            if file_ext == 'c' or file_ext == 'h':
+            if file_ext == 'c' or file_ext == 'h' or file_ext == 'cpp':
                 self.lizard_broken(lines, file_ext, analysis.function_list)
         else:
             with open(file_path, errors='replace') as s:
@@ -861,6 +861,10 @@ class File:
 
         #self.parameters.sort()
         #self.parameters = list(k for k, _ in itertools.groupby(self.parameters))
+        # compacting methods and parameters
+        for i_each, each_method in enumerate(self.methods):
+            if len(each_method) == 4 and each_method[0] == each_method[1]:
+                self.methods[i_each] = (each_method[0], each_method[2], each_method[3])
         log.info('finished methods and parameters')
         # ----------------------------------------------------------------
         # Classes
@@ -871,19 +875,34 @@ class File:
         # Libraries
         # ----------------------------------------------------------------
         self.libs = find_libs(lines, file_path, file_ext)
+        for i_each, each_lib in enumerate(self.libs):
+            if len(each_lib) == 4 and each_lib[0] == each_lib[1]:
+                self.libs[i_each] = (each_lib[0], each_lib[2], each_lib[3])
         log.info('finished libs')
         # ----------------------------------------------------------------
         # Comments
         # ----------------------------------------------------------------
         self.comments = find_comments(lines, file_path, file_ext)
+        for i_each, each_comment in enumerate(self.comments):
+            if len(each_comment) == 4 and each_comment[0] == each_comment[1]:
+                self.comments[i_each] = (each_comment[0], each_comment[2], each_comment[3])
         log.info('finished comments')
         # ----------------------------------------------------------------
         # Identifiers, Literals, and Operators
         # ----------------------------------------------------------------
         ids = find_ids(lines, file_path, file_ext)
         self.ids = ids[0]
+        for i_each, each_id in enumerate(self.ids):
+            if len(each_id) == 4 and each_id[0] == each_id[1]:
+                self.ids[i_each] = (each_id[0], each_id[2], each_id[3])
         self.literals = ids[3]
+        for i_each, each_lit in enumerate(self.literals):
+            if len(each_lit) == 4 and each_lit[0] == each_lit[1]:
+                self.literals[i_each] = (each_lit[0], each_lit[2], each_lit[3])
         self.operators = ids[6]
+        for i_each, each_op in enumerate(self.operators):
+            if len(each_op) == 4 and each_op[0] == each_op[1]:
+                self.operators[i_each] = (each_op[0], each_op[2], each_op[3])
         log.info('finished ids')
 
     def export(self, output_path=None):

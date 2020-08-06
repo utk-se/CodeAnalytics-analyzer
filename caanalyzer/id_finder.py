@@ -490,28 +490,28 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                 id_counter += 1
                 # ids.append([each[1], [each[2][0], each[3][0]],
                 #             [each[2][1], each[3][1]]])
-                ids.append([each[2][0], each[3][0],
+                ids.append([each[2][0]-1, each[3][0]-1,
                             each[2][1], each[3][1]])
                 unique_ids.add(each[1])
             if each[0] == 'INTLITERAL':
                 lit_counter += 1
                 # lits.append([each[1], [each[2][0], each[3][0]],
                 #              [each[2][1], each[3][1]]])
-                lits.append([each[2][0], each[3][0],
+                lits.append([each[2][0]-1, each[3][0]-1,
                              each[2][1], each[3][1]])
                 unique_lits.add(each[1])
             if each[0] == 'STRINGLITERAL':
                 lit_counter += 1
                 # lits.append([each[1][1:len(each[1]) - 1], [each[2][0], each[3][0]],
                 #              [each[2][1], each[3][1]]])
-                lits.append([each[2][0], each[3][0],
+                lits.append([each[2][0]-1, each[3][0]-1,
                              each[2][1], each[3][1]])
                 unique_lits.add(each[1][1:len(each[1]) - 1])
             if each[1] in java_ops:
                 op_counter += 1
                 # ops.append([each[1], [each[2][0], each[3][0]],
                 #             [each[2][1], each[3][1]]])
-                ops.append([each[2][0], each[3][0],
+                ops.append([each[2][0]-1, each[3][0]-1,
                             each[2][1], each[3][1]])
                 unique_ops.add(each[1])
 
