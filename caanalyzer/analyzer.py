@@ -213,7 +213,9 @@ class Repo:
                 try:
                     is_minified = False
                     is_es6 = False
-                    if file_ext == 'js':
+                    if file_ext == 'js' and file_path.split('.')[-2] == 'min':
+                        is_minified = True
+                    elif file_ext == 'js':
                         with open(file_path, 'r') as jsf:
                             jsf_lines = jsf.readlines()
                             no_news = True
@@ -818,7 +820,7 @@ class File:
                             func_lines = ''.join(func_lines)
                             match = m.search(func_lines)
                             if match is None:
-                                fixed_at_error = self.lizard_broken(lines, file_ext)
+                                fixed_at_error = self.lizard_broken(lines, file_ext, [])
                                 break
                             else:
                                 start_l = start_line + count_newlines(func_lines, match.start(2))
@@ -903,7 +905,7 @@ class File:
         for i_each, each_op in enumerate(self.operators):
             if len(each_op) == 4 and each_op[0] == each_op[1]:
                 self.operators[i_each] = (each_op[0], each_op[2], each_op[3])
-        log.info('finished ids')
+        log.info('finished identifiers, literals, and operators')
 
     def export(self, output_path=None):
         """Output chosen analytics for the file.
