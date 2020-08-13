@@ -495,7 +495,7 @@ class File:
                     for arg in range(len(arg_l)):
                         arg_l[arg] = arg_l[arg].strip().rstrip(',')
                     arg_l[-1] = arg_l[-1][:-1]
-                    just_args = lines[e][so:eo+1][lines[e][so:eo+1].find('(')+1:-1]
+                    just_args = lines[e][so:eo+1][lines[e][so:eo+1].find('('):-1]
                     while '' in arg_l:
                         arg_l.remove('')
                     for arg in arg_l:
@@ -564,7 +564,7 @@ class File:
                                                     lines[l].find(arg),
                                                     lines[l].find(arg)+len(arg)))
                         else:
-                            ls = list(range(l, l+num_news_in_arg+1))
+                            # ls = list(range(l, l+num_news_in_arg+1))
                             start_offsets = []
                             end_offsets = []
                             start_offsets.append(lines[l].find(all_func[pos:pos+len(arg)].split('\n')[0]))
@@ -573,7 +573,7 @@ class File:
                             for one in lines[l:l+num_news_in_arg]:
                                 end_offsets.append(len(one))
                             end_offsets.append(len(all_func[pos:pos+len(arg)].split('\n')[-1]))
-                            self.parameters.append((ls, start_offsets, end_offsets))
+                            self.parameters.append((l, l+num_news_in_arg, start_offsets, end_offsets))
         elif ext == 'js':
             try:
                 items = esprima.parse(''.join(lines), options={'loc': True, 'tolerant': True})
@@ -650,6 +650,7 @@ class File:
                                         self.methods.append([sl - 1, sc, ec])
                                     else:
                                         self.methods.append([sl - 1, el - 1, sc_l, ec_l])
+
                                 else:
                                     sl = method['callee']['loc']['start']['line']
                                     el = method['callee']['loc']['end']['line']
@@ -663,6 +664,7 @@ class File:
                                         self.methods.append([sl - 1, sc, ec])
                                     else:
                                         self.methods.append([sl - 1, el - 1, sc_l, ec_l])
+
                             break
                 # end of methods
                 # params
@@ -765,7 +767,11 @@ class File:
             raise IOError
 
         # ----------------------------------------------------------------
-        # Methods and Paramaters
+        # Methods and Parameters
+        # METHODS FORMAT: starting line, ending line, starting line offsets, ending line offsets
+        #             OR  line, starting offset, ending offset
+        # PARAMETERS FORMAT: starting line, ending line, starting line offsets, ending line offsets
+        #                OR  line, starting offset, ending offset
         # ----------------------------------------------------------------
         if file_ext == 'js':
             self.lizard_broken(lines, file_ext, [])
@@ -836,7 +842,7 @@ class File:
                         else:
                             break
                     if spans_multiple_lines and not fixed_at_error:
-                        func_lines = list(range(start_l, end_l+1))
+                        # func_lines = list(range(start_l, end_l+1))
                         start_offsets = []
                         end_offsets = []
                         start_offsets.append(start_offset)
@@ -846,7 +852,7 @@ class File:
                             end_offsets.append(len(func_line))
                         start_offsets.append(len(lines[end_l]) - len(lines[end_l].lstrip()))
                         end_offsets.append(end_offset)
-                        parameter = (func_lines, start_offsets, end_offsets)
+                        parameter = (start_l, end_l, start_offsets, end_offsets)
                         self.parameters.append(parameter)
                     elif not fixed_at_error:
                         offset = match.span(2)
@@ -861,20 +867,26 @@ class File:
                 self.methods = mags[0]
                 self.parameters = mags[1]
 
-        #self.parameters.sort()
-        #self.parameters = list(k for k, _ in itertools.groupby(self.parameters))
-        # compacting methods and parameters
         for i_each, each_method in enumerate(self.methods):
             if len(each_method) == 4 and each_method[0] == each_method[1]:
                 self.methods[i_each] = (each_method[0], each_method[2], each_method[3])
+        for i_each, each_param in enumerate(self.parameters):
+            if len(each_param) == 4 and each_param[0] == each_param[1]:
+                self.parameters[i_each] = (each_param[0], each_param[2], each_param[3])
         log.info('finished methods and parameters')
         # ----------------------------------------------------------------
         # Classes
+        # Classes FORMAT: starting line, ending line, starting line offsets, ending line offsets
+        #              OR line, starting offset, ending offset
         # ----------------------------------------------------------------
         self.classes = find_classes(lines, file_path, file_ext)
+        for i_each, each_class in enumerate(self.classes):
+            if len(each_class) == 4 and each_class[0] == each_class[1]:
+                self.classes[i_each] = (each_class[0], each_class[2], each_class[3])
         log.info('finished classes')
         # ----------------------------------------------------------------
         # Libraries
+        # Library FORMAT: line, starting offset, ending offset
         # ----------------------------------------------------------------
         self.libs = find_libs(lines, file_path, file_ext)
         for i_each, each_lib in enumerate(self.libs):
@@ -883,6 +895,8 @@ class File:
         log.info('finished libs')
         # ----------------------------------------------------------------
         # Comments
+        # Comment FORMAT: line, starting offset, ending offset
+        #              OR starting line, ending line, starting offsets, ending offsets
         # ----------------------------------------------------------------
         self.comments = find_comments(lines, file_path, file_ext)
         for i_each, each_comment in enumerate(self.comments):
@@ -891,6 +905,7 @@ class File:
         log.info('finished comments')
         # ----------------------------------------------------------------
         # Identifiers, Literals, and Operators
+        # All Format: line, starting offset, ending offset
         # ----------------------------------------------------------------
         ids = find_ids(lines, file_path, file_ext)
         self.ids = ids[0]

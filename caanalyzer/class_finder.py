@@ -32,9 +32,13 @@ def handle_bad_python(path):
                         while k >= 0:  # look for ending line of class
                             if content[k].strip() != '':
                                 # k is the last line of the class
+                                start_offsets = [token.start[1]]
+                                start_offsets.extend([len(x.replace('\r\n', '\n')) -
+                                                      len(x.replace('\r\n', '\n').lstrip()) for x in
+                                                      content[token.start[0]:k+1]])
                                 class_tuples.append(tuple([token.start[0]-1,
                                                            k,
-                                                           token.start[1],
+                                                           start_offsets,
                                                            [len(x.replace('\r\n', '\n')) for x in
                                                             content[token.start[0]-1:k+1]]]))
                                 break
@@ -87,7 +91,8 @@ def find_classes(content, path, lang, verbose=0, py2=0):
                 class_tuples.append(tuple([each.lineno - 1,
                                            each.body[len(each.body) - 1].lineno - 1,
                                            # each.body[0].col_offset,
-                                           len(content[each.lineno - 1]) - len(content[each.lineno - 1].lstrip()),
+                                           [len(k) - len(k.lstrip()) for k in content[each.lineno - 1:
+                                                                     each.body[len(each.body) - 1].lineno]],
                                            # [len(k)-1 for k in content[each.lineno:
                                            [len(k) for k in content[each.lineno - 1:
                                                                     each.body[len(each.body)-1].lineno]]]))
@@ -112,11 +117,14 @@ def find_classes(content, path, lang, verbose=0, py2=0):
                         if verbose:
                             log.info("found end of class at line # " + str(each2.loc.start.line))
                         # class_tuples.append(tuple([each.loc.start.line - 1, each2.loc.start.line - 1]))
+                        start_offsets = [each.loc.start.column]
+                        start_offsets.extend([len(k) - len(k.lstrip()) for k in content[each.loc.start.line:
+                                                                                        each2.loc.start.line]])
                         class_tuples.append(tuple([each.loc.start.line - 1,
                                                    each2.loc.start.line - 1,
-                                                   each.loc.start.column,
+                                                   start_offsets,
                                                    [len(k) for k in content[each.loc.start.line-1:
-                                                                              each2.loc.start.line]]]))
+                                                                            each2.loc.start.line]]]))
                         break
 
     elif lang == 'java':
@@ -139,11 +147,14 @@ def find_classes(content, path, lang, verbose=0, py2=0):
                         if verbose:
                             log.info("found end of class at line # " + str(each2[2][0]))
                         # class_tuples.append(tuple([each[2][0] - 1, each2[2][0] - 1]))
+                        start_offsets = [each[2][0]]
+                        start_offsets.extend([len(k) - len(k.lstrip()) for k in content[each[2][0]:
+                                                                                        each2[2][0]]])
                         class_tuples.append(tuple([each[2][0] - 1,
                                                    each2[2][0] - 1,
-                                                   each[2][0],
+                                                   start_offsets,
                                                    [len(k) for k in content[each[2][0]-1:
-                                                                              each2[2][0]]]]))
+                                                                            each2[2][0]]]]))
                         break
 
     elif lang == 'c' or lang == 'cpp' or lang == 'h':
@@ -189,11 +200,14 @@ def find_classes(content, path, lang, verbose=0, py2=0):
                             if '}' in line2:
                                 right_curly_count += 1
                             if left_curly_count == right_curly_count:
+                                start_offsets = [len(result_p2.group(1))]
+                                start_offsets.extend([len(k) - len(k.lstrip())
+                                                      for k in content[line_no_start+1:line_no_end+1]])
                                 class_tuples.append(
                                     # tuple([line_no_start, line_no_end]))
                                     tuple([line_no_start,
                                            line_no_end,
-                                           len(result_p2.group(1)),
+                                           start_offsets,
                                            [len(k) for k in content[line_no_start:line_no_end+1]]]))
                                 if verbose:
                                     log.info(
@@ -213,11 +227,14 @@ def find_classes(content, path, lang, verbose=0, py2=0):
                         if '}' in line2:
                             right_curly_count += 1
                         if left_curly_count == right_curly_count:
+                            start_offsets = [len(result_p.group(1))]
+                            start_offsets.extend([len(k) - len(k.lstrip())
+                                                  for k in content[line_no_start+1:line_no_end+2]])
                             class_tuples.append(
                                 # tuple([line_no_start, line_no_end + 1]))
                                 tuple([line_no_start,
                                        line_no_end + 1,
-                                       len(result_p.group(1)),
+                                       start_offsets,
                                        [len(k) for k in content[line_no_start:line_no_end+2]]]))
                             if verbose:
                                 log.info('found end of class at line # ' + str(line_no_end + 2))

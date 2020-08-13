@@ -46,8 +46,11 @@ def find_comments(content, path, lang):
                         # comment += re.search(r"(.*)[*]\/", line2).group(1)
                         # comments.append(
                         #     [comment.strip(), [num, offset], [num2, l_offset]])
-                        comments.append(
-                            [num, num2, offset, l_offset])
+                        start_offsets = [offset]
+                        start_offsets.extend([len(k) - len(k.lstrip()) for k in content[num+1:num2+1]])
+                        end_offsets = [len(k) for k in content[num:num2]]
+                        end_offsets.append(l_offset)
+                        comments.append([num, num2, start_offsets, end_offsets])
                         break
                     else:
                         pass
