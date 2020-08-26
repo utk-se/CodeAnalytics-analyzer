@@ -233,7 +233,7 @@ class Repo:
                         file_obj = File(file_path, file_ext, tabsize)
                     else:
                         continue
-                except (RecursionError, IOError) as e:
+                except (RecursionError, IOError, UnicodeDecodeError) as e:
                     continue
 
                 # Add file analytics to repo analytics
