@@ -116,13 +116,10 @@ def find_methods_and_args(p_children, f_lines):
                                     param[ip+1] = re.fullmatch(r'(\d+).*', p_content).group(1)
                                 except AttributeError:
                                     break
-                        #try:
-                        parameters.append([int(param[1]) - 1, int(param[2]), int(param[2]) + len(param[0]) - 1])
-                        #except ValueError:
-                        #    print(node)
-                        #    print(one.get_params())
-                        #    print(params)
-                        #    exit()
+                        try:
+                            parameters.append([int(param[1]) - 1, int(param[2]), int(param[2]) + len(param[0]) - 1])
+                        except ValueError:
+                            continue
                 else:
                     #print(node)
                     try:
@@ -160,18 +157,24 @@ def find_methods_and_args(p_children, f_lines):
                                 if isinstance(broken_nodes[start_back_search], list):
                                     # try:
                                     z = 0
+                                    start_l_failure = False
                                     while 1:
                                         try:
                                             start_l = int(broken_nodes[i-(1+z)][1]) - 1
                                             break
                                         except IndexError:
                                             z += 1
+                                        except ValueError:
+                                            start_l_failure = True
+                                            break
                                     # except IndexError:
                                     #     print(node)
                                     #     print(broken_nodes)
                                     #     print(i-1)
                                     #     print(broken_nodes[i-1])
                                     #     exit()
+                                    if start_l_failure:
+                                        break
                                     start_offset = int(broken_nodes[i-(1+z)][2])
                                     end_l = int(broken_nodes[start_back_search][1]) - 1
                                     end_offset = int(broken_nodes[start_back_search][2]) + len(broken_nodes[start_back_search][0]) + (num_rs-level)
