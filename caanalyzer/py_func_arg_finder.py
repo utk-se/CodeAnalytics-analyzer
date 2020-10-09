@@ -52,6 +52,7 @@ def find_methods_and_args(p_children, f_lines):
                                 #    print(one_broken)
                             else:
                                 try:
+                                    #print(one_broken)
                                     result = lines[latest_pos[0]-1+i].find(one_broken)
                                 except IndexError:
                                     if lines[latest_pos[0]-1].find(one_broken) != -1:
@@ -111,7 +112,10 @@ def find_methods_and_args(p_children, f_lines):
                     for param in params:
                         for ip, p_content in enumerate(param[1:]):
                             if re.fullmatch(r'\d+', p_content) is None:
-                                param[ip+1] = re.fullmatch(r'(\d+).*', p_content).group(1)
+                                try:
+                                    param[ip+1] = re.fullmatch(r'(\d+).*', p_content).group(1)
+                                except AttributeError:
+                                    break
                         #try:
                         parameters.append([int(param[1]) - 1, int(param[2]), int(param[2]) + len(param[0]) - 1])
                         #except ValueError:
@@ -121,8 +125,11 @@ def find_methods_and_args(p_children, f_lines):
                         #    exit()
                 else:
                     #print(node)
-                    # try:
-                    broken_nodes = break_s(node, lines)
+                    try:
+                        broken_nodes = break_s(node, lines)
+                    except IndexError:
+                        continue
+                    #print(broken_nodes)
                     if not broken_nodes:
                         continue
                     # except IndexError:
@@ -130,6 +137,11 @@ def find_methods_and_args(p_children, f_lines):
                     #     exit()
                     #print(broken_nodes)
                     level = 0
+                    while 1:
+                        if broken_nodes[0] == '(':
+                            broken_nodes = broken_nodes[1:]
+                        else:
+                            break
                     for i, each_node in enumerate(broken_nodes):
                         if each_node == '(':
                             level += 1
@@ -193,10 +205,13 @@ def find_methods_and_args(p_children, f_lines):
                                             break
                                     break
                                 elif broken_nodes[start_back_search] == '(':
-                                    methods.append([int(broken_nodes[i-1][1])-1,
-                                                    int(broken_nodes[i-1][1])-1,
-                                                    int(broken_nodes[i-1][2]),
-                                                    int(broken_nodes[i-1][2]) + len(broken_nodes[i-1][0]) + 2])
+                                    try:
+                                        methods.append([int(broken_nodes[i-1][1])-1,
+                                                        int(broken_nodes[i-1][1])-1,
+                                                        int(broken_nodes[i-1][2]),
+                                                        int(broken_nodes[i-1][2]) + len(broken_nodes[i-1][0]) + 2])
+                                    except IndexError:
+                                        pass
                                     break
                                 else:
                                     start_back_search -= 1

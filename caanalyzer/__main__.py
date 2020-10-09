@@ -9,6 +9,7 @@ import pprint
 
 def analyze(path, ignorefile=None):
     repo = analyzer.Repo(path, ignorefile, True)
+    print(path)
     return repo.export()
 
 def main():

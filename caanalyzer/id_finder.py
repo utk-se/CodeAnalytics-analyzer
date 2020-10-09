@@ -123,23 +123,29 @@ def find_ids(content, path, lang, verbose=0, py2=0):
                     info = re.search(r".*Name\((.*)\).*", each).group(1)
                     info = info.split()
                     # ids.append([info[2][4:len(info[2]) - 2], info[0][7:len(info[0]) - 1], info[1][11:len(info[1]) - 1]])
-                    ids.append([int(info[0][7:len(info[0]) - 1]) - 1,
-                                int(info[0][7:len(info[0]) - 1]) - 1,
-                                int(info[1][11:len(info[1]) - 1]),
-                                int(info[1][11:len(info[1]) - 1]) + len(info[2][4:len(info[2]) - 2])])
+                    try:
+                        ids.append([int(info[0][7:len(info[0]) - 1]) - 1,
+                                    int(info[0][7:len(info[0]) - 1]) - 1,
+                                    int(info[1][11:len(info[1]) - 1]),
+                                    int(info[1][11:len(info[1]) - 1]) + len(info[2][4:len(info[2]) - 2])])
+                    except ValueError:
+                        continue
                     unique_ids.add(info[2][4:len(info[2]) - 2])
                 # if bool(fullmatch(pattern2, each)):
                 if bool(fullmatch(r".*Num\(.*\).*", each)):
                     info = re.search(r".*Num\((.*)\).*", each).group(1)
                     info = info.split(', ')
-                    if int(info[1][11:]) >= 0:
-                        lit_counter += 1
-                        # lits.append([info[2][2:], info[0][7:], info[1][11:]])
-                        lits.append([int(info[0][7:]) - 1,
-                                     int(info[0][7:]) - 1,
-                                     int(info[1][11:]),
-                                     int(info[1][11:]) + len(info[2][2:])])
-                        unique_lits.add(info[2][2:])
+                    try:
+                        if int(info[1][11:]) >= 0:
+                            lit_counter += 1
+                            # lits.append([info[2][2:], info[0][7:], info[1][11:]])
+                            lits.append([int(info[0][7:]) - 1,
+                                         int(info[0][7:]) - 1,
+                                         int(info[1][11:]),
+                                         int(info[1][11:]) + len(info[2][2:])])
+                            unique_lits.add(info[2][2:])
+                    except ValueError:
+                        continue
                 # if bool(fullmatch(pattern3, each)):
                 if bool(fullmatch(r".*Str\(.*\).*", each)):
                     info = re.search(r".*Str\((.*)\).*", each).group(1)
