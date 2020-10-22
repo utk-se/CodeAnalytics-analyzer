@@ -42,9 +42,10 @@ Num = Union[int, float]
 
 '''
 Container for code repository.
-TODO: refactor to become pandas extension
 https://pandas.pydata.org/pandas-docs/stable/development/extending.html
 ie, df.index_repo(), df.mean() versus repo.df.mean(), repo.index()
+TODO: Support outputting to sql server
+TODO: Support existing data frame as input
 '''
 
 
@@ -136,7 +137,7 @@ class CodeRepo:
     def unprocessed_tokens(self):
         if self.tokenizers is None:
             return []
-        elif not df.empty:
+        elif not self.df.empty:
             return set(flatten_list(self.tokenizer_names)) - \
                 set(self.df.index.get_level_values('token_type').unique())
         else:
@@ -149,7 +150,7 @@ class CodeRepo:
     def unprocessed_metrics(self):
         if not self.metrics:
             return []
-        elif not df.empty:
+        elif not self.df.empty:
             return set(self.metric_names) - set(self.df.columns)
         else:
             return self.metric_names
@@ -159,7 +160,7 @@ class CodeRepo:
     '''
 
     def unprocessed_files(self):
-        if not df.empty:
+        if not self.df.empty:
             return set(self.file_paths) - set(
                 self.df.index.get_level_values('file_path').unique())
         else:
@@ -219,8 +220,8 @@ class CodeRepo:
     if you want to join info for multiple repos, index multiple repos and perform a pandas join
     '''
 
-    def index(self, tokenizers, metrics={}):
-        if self.indexed:
+    def index(self, tokenizers, metrics={}, reindex=False):
+        if self.indexed and not reindex:
             return
 
         # TODO: verify language support from tokenizers
@@ -265,9 +266,14 @@ class CodeRepo:
                             substr = codestr_lines[line_start: line_end]
                             substr[0] = substr[0][char_start:]
                             substr[-1] = substr[-1][:char_end]
-
-                            mv = [mm(substr)
-                                  for mm in self.metrics.values()]
+                            
+                            # try to calculate metrics, otherwise continue
+                            mv = []
+                            for mm in self.metrics.values():
+                                try:
+                                    mv.append(mm(substr))
+                                except:
+                                    mv.append(np.nan)
 
                             combined_row = np.concatenate(
                                 (row, np.array(mv)))
