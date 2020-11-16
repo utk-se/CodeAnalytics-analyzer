@@ -58,8 +58,9 @@ def get_tokens_for_file(filepath):
 Written to use pygments, however, it should apply to anything that has the format idx, type, val or len.
 Would be a bit more trivial if pygments indexed their data by line.
 The resulting array is going to be large, ideally results will be aggregated across all repos (just add the np arrays)
+TODO: replace any CRLF with LF
 '''
-def file_tokens_to_frequency_count(input_path, src_resolution_x=250,src_resolution_y=2000,
+def file_tokens_to_frequency_count(input_path, static_frequency_array=None, src_resolution_x=250,src_resolution_y=2000,
     target_token_types=pygments.token.STANDARD_TYPES.keys(), 
     exclude_token_types = [Token.Text.Whitespace, Token.Literal.String.Doc]):
     token_types = list(set(target_token_types) - set(exclude_token_types))
@@ -67,8 +68,12 @@ def file_tokens_to_frequency_count(input_path, src_resolution_x=250,src_resoluti
     pygment_token_ids = {k:i for i,k in enumerate(token_types)}
 
     y_start=0
-    static_frequency_array = np.zeros((src_resolution_y, src_resolution_x, len(pygment_token_ids)), dtype=np.int)
-
+    # assert(static_frequency_array.shape == (src_resolution_y, src_resolution_x, len(pygment_token_ids)))
+    if static_frequency_array is None:
+        static_frequency_array = np.zeros((src_resolution_y, src_resolution_x, len(pygment_token_ids)), dtype=np.int)
+    tokens = get_tokens_for_file(input_path)
+    if tokens is None:
+        return static_frequency_array
     for (idx, tokentype, value) in get_tokens_for_file(input_path):
 
         # allow for inclusion/exclusion of token types
@@ -76,7 +81,13 @@ def file_tokens_to_frequency_count(input_path, src_resolution_x=250,src_resoluti
             continue
         # pass by newlines until we reach one that
         # TODO: consider if idx == newline indices 
-        while idx > newline_indices[y_start]:
+        # lmao write a C program to get around the GIL
+        while True:
+            if (y_start >= len(newline_indices)) or (y_start >= src_resolution_y):
+                break
+
+            if idx < newline_indices[y_start]:
+                break
             y_start+=1
 
         y_end=y_start
@@ -101,6 +112,7 @@ def file_tokens_to_frequency_count(input_path, src_resolution_x=250,src_resoluti
 
             if idx + len(value) < newline_indices[y_end]:
                 break
+
             x_end = newline_indices[y_end]
             if y_end > 0:
                 x_end -= newline_indices[y_end-1]
@@ -118,7 +130,7 @@ Note that this is more of an example, as they should be aggregated
 globally, although probably grouped by language
 '''
 def repo_frequency_count():
-    
+    pass
 '''
 A sample plotting function I've developed to display heatmaps
 '''
